@@ -1,0 +1,54 @@
+# TCL Smart TV Pro (device G08, product G08_4K_US, MediaTek tcl9618), US
+# Google TV 14 (SDK 34), firmware tcl9618-user 14 UTT2.250416.001 AU14
+# Started from examples/tcl-g08-us-google-tv/debloat.txt, adjusted for this set and its owner's choices.
+#
+# Apply:   powershell -ExecutionPolicy Bypass -File tools\disable.ps1 -TvHost <tv ip> my-tv\debloat.txt
+# Undo:    powershell -ExecutionPolicy Bypass -File tools\restore.ps1 -TvHost <tv ip> my-tv\debloat.txt com.google.android.apps.tv.launcherx
+# Everything is DISABLED with pm disable-user --user 0, not uninstalled. Comment out any line to keep it.
+# See my-tv/CHANGELOG.md for what was done, in what order, and how it was checked.
+
+# Batch 1: TCL promo, push messages and retail / hotel demo
+com.tcl.tv.plus                        # TCL TV+ free ad-supported channels
+com.tcl.messagebox                     # TCL pushed messages and promos
+com.tcl.esticker                       # retail-demo sticker
+com.tcl.hotelmenu                      # hotel-mode portal
+com.tcl.exhibit                        # store demo
+com.tcl.tv.tclhome_passive             # TCL content pushed to the home screen at boot
+com.tcl.dashboard                      # TCL Home panel and its promos
+
+# Batch 2: telemetry, viewing tracking, diagnostics and Android 14 ad / privacy services
+com.tcl.ttvs                           # Samba TV ACR viewing tracking, TCL "BI" analytics, T-Cast, Alexa core (re-disabled once the owner dropped Alexa)
+com.tcl.logkit                         # log capture and upload
+com.tcl.usercenter                     # TCL account sign-in nags
+com.google.android.feedback
+com.android.tv.feedbackconsent
+com.android.adservices.api             # Privacy Sandbox
+com.android.ondevicepersonalization.services
+com.android.federatedcompute.services
+
+# Batch 3: extras nobody asked for
+com.tcl.ocean.instructions             # on-TV manual
+com.tcl.hearaid                        # hearing test / accessibility helper
+com.tcl.t_solo                         # Bluetooth "listen alone"
+com.android.printspooler
+com.google.android.syncadapters.calendar
+com.google.android.onetimeinitializer
+com.tcl.browser
+com.tcl.channelplus                    # TCL Channel+ free live channels (a Live TV input)
+
+# Batch 3: streaming preloads the owner does not use
+com.tubitv
+com.google.android.play.games
+com.instagram.airwave                  # Instagram for TV, pushed at first setup
+
+# Batch 3: voice, off by choice (remote mic button)
+com.google.android.katniss             # Google Assistant / Gemini voice search
+
+# Batch 4: stock home, only after com.gathin.tvhome was installed, started and checked
+com.google.android.apps.tv.launcherx   # Google TV home screen (stock launcher)
+# Second Home claimant. Disabled only after Wi-Fi was forgotten and re-joined in Settings, so the saved
+# network belongs to com.android.tv.settings instead of the wizard (it was setupwraith's before).
+com.google.android.tungsten.setupwraith  # setup wizard; its RecoveryActivity takes Home when launcherx is off
+
+# Batch 5: Alexa, off by the owner's choice (com.tcl.ttvs above hosts its core service)
+com.tcl.smartalexa                     # Alexa built-in

@@ -1,0 +1,21 @@
+{
+  "dock_apps": [
+    "com.hulu.livingroomplus",
+    "com.peacocktv.peacockandroid",
+    "com.google.android.youtube.tv",
+    "com.sportsnetpittsburgh.app"
+  ],
+  "hidden_apps": ["com.tcl.tv", "com.tcl.suspension"],
+  "live_tv_package": "com.tcl.tv",
+  "app_library": true,
+  "status_provider": "io.github.kingshmiley.tvweather.status",
+  "status_query": "lat=40.4406&lon=-79.9959",
+  "settings_key_keycodes": [83],
+  "settings_key_panel": true,
+  "app_keys": [
+    "4062:com.netflix.ninja",
+    "4099:com.amazon.amazonvideo.livingroom",
+    "190:com.google.android.youtube.tv",
+    "4184:com.hulu.livingroomplus"
+  ]
+}
