@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher tile: a sun behind a cloud on deep blue, the same shapes as the launcher's WeatherIcon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path android:fillColor="#FF1C4678" android:pathData="M0,0h320v180h-320z" />
+    <path android:fillColor="#FFFFC446"
+        android:pathData="M180,62m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0" />
+    <path android:fillColor="#FFF0F4F8"
+        android:pathData="M136,124m-25,0a25,25 0,1 1,50 0a25,25 0,1 1,-50 0
+            M164,104m-32,0a32,32 0,1 1,64 0a32,32 0,1 1,-64 0
+            M190,125m-23,0a23,23 0,1 1,46 0a23,23 0,1 1,-46 0
+            M136,118h54v31h-54z" />
+</vector>

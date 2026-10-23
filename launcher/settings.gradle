@@ -14,3 +14,5 @@ dependencyResolutionManagement {
 }
 rootProject.name = "tvhome"
 include ':app'
+// Optional weather module: a status provider for the launcher (docs/specs/status.md). Its own app, its own APK.
+include ':weather'

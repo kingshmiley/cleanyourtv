@@ -1,0 +1,39 @@
+plugins {
+    id 'com.android.application'
+}
+
+// A status provider for the launcher (docs/specs/status.md): the weather line, alerts and day cards on Home, from
+// the US National Weather Service. Its own app with its own package, so the launcher keeps no network permission.
+android {
+    namespace 'io.github.kingshmiley.tvweather'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'io.github.kingshmiley.tvweather'
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Sideloaded over ADB like the launcher: signed with the debug key.
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // Test only: the JVM has no org.json, Android does. The parser is tested against saved NWS responses.
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+}

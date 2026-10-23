@@ -4,6 +4,7 @@ __pycache__/
 launcher/.gradle/
 launcher/build/
 launcher/app/build/
+launcher/weather/build/
 launcher/local.properties
 # your own TV's dumps (serial, android_id, device names) stay local
 backup/
@@ -17,3 +18,6 @@ work/
 *.aab
 launcher/hs_err_pid*.log
 launcher/replay_pid*.log
+
+# the TV owner's own theme: its status_query holds the home location. config.example.json is committed instead.
+my-tv/theme/config.json

@@ -156,6 +156,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private TextView raceKicker, raceHeadline, raceSessions;
     /** config.xml show_stats, overridable by a theme. Off: the line is gone and nothing is read. */
     private boolean showStats;
+    /** A theme's status_provider and status_query (StatusRows); an empty authority means nothing is read. */
+    private String statusAuthority, statusQuery;
+    private View statusPanel;
+    private ImageView statusIcon;
+    private TextView statusTemp, statusText, statusDetail, statusBadge, statusAlert;
+    private LinearLayout statusDays;
     private boolean shamsi;
     /** greeting_name: said after the greeting, which is shown in capitals. */
     private String greetingName = "";
@@ -363,6 +369,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         raceHeadline = findViewById(R.id.raceHeadline);
         raceSessions = findViewById(R.id.raceSessions);
         showStats = cfg.showStats;
+        statusAuthority = cfg.statusProvider;
+        statusQuery = cfg.statusQuery;
+        statusPanel = findViewById(R.id.statusPanel);
+        statusIcon = findViewById(R.id.statusIcon);
+        statusTemp = findViewById(R.id.statusTemp);
+        statusText = findViewById(R.id.statusText);
+        statusDetail = findViewById(R.id.statusDetail);
+        statusBadge = findViewById(R.id.statusBadge);
+        statusAlert = findViewById(R.id.statusAlert);
+        statusDays = findViewById(R.id.statusDays);
         shamsi = cfg.shamsiDate;
         greetingName = cfg.greetingName;
         if (shamsi) {
@@ -480,6 +496,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 glassTargetY -= dy;
                 glassScrollShift -= dy;
                 glass.setTranslationY(glass.getTranslationY() - dy);
+            }
+        });
+
+        // The status line and day cards sit in the space the grid scrolls through: fade them out as the rows move
+        // up, so tiles never pass over them, and back in at the top.
+        grid.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
+                fadeStatusWithScroll();
             }
         });
 
@@ -670,6 +695,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             pillsShown = true;
         }
         if (showStats) startStats();
+        startStatus();
         sky.update();
         wallpaperPlayer.start();
         handler.postDelayed(minuteTick, MINUTE_MS);
@@ -793,6 +819,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         heroArt.animate().cancel();
         handler.removeCallbacks(minuteTick);
         stopStats();
+        stopStatus();
         if (diya != null) diya.stop();
         cancelPendingFocusScroll();
         // Nothing of ours stays on screen over another app; an undecided prompt simply returns next time.
@@ -1930,6 +1957,171 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             greeting.setTextColor(greetingColor);
         }
         if (shamsi) shamsiDate.setText(Shamsi.today());
+    }
+
+    // ---- status line (a theme's status_provider, docs/specs/status.md) ----------------------------------
+
+    /** How often Home asks again while it stays on screen; the provider decides when it actually refreshes. */
+    private static final long STATUS_MS = 5 * 60_000L;
+    private static final String[] STATUS_COLUMNS = {"kind", "icon", "title", "value", "detail", "chance"};
+    private HandlerThread statusThread;
+    /** The current run's handler, as with statsBg: a read whose handler is no longer this one is dropped. */
+    private volatile Handler statusBg;
+    private android.database.ContentObserver statusObserver;
+
+    /** Reads the provider now, when it says its data changed, and every {@link #STATUS_MS} while Home is resumed. */
+    private void startStatus() {
+        if (statusAuthority.isEmpty() || statusThread != null) return;
+        Uri uri = Uri.parse("content://" + statusAuthority + "/status" + (statusQuery.isEmpty() ? "" : "?" + statusQuery));
+        statusThread = new HandlerThread("status");
+        statusThread.start();
+        Handler bg = new Handler(statusThread.getLooper());
+        statusBg = bg;
+        Runnable read = new Runnable() {
+            @Override
+            public void run() {
+                if (statusBg != bg) return;
+                bg.removeCallbacks(this);
+                StatusRows.Status status = readStatus(uri);
+                handler.post(() -> {
+                    if (statusBg == bg) bindStatus(status);
+                });
+                bg.postDelayed(this, STATUS_MS);
+            }
+        };
+        statusObserver = new android.database.ContentObserver(bg) {
+            @Override
+            public void onChange(boolean selfChange) {
+                read.run();
+            }
+        };
+        try {
+            getContentResolver().registerContentObserver(uri.buildUpon().clearQuery().build(), true, statusObserver);
+        } catch (SecurityException e) {
+            statusObserver = null;   // the timed reads still pick up new data
+        }
+        bg.post(read);
+    }
+
+    private void stopStatus() {
+        if (statusThread == null) return;
+        if (statusObserver != null) getContentResolver().unregisterContentObserver(statusObserver);
+        statusObserver = null;
+        statusBg.removeCallbacksAndMessages(null);
+        statusThread.quit();
+        statusThread = null;
+        statusBg = null;
+        // Like the stats line: paused, the last status stays on screen so nothing shifts under an app's exit animation.
+    }
+
+    /** Gone after the grid has scrolled {@link #STATUS_FADE_DP}; partly there on the way. */
+    private static final float STATUS_FADE_DP = 40f;
+
+    private void fadeStatusWithScroll() {
+        if (statusPanel == null || statusAuthority.isEmpty()) return;
+        float scrolled = grid.computeVerticalScrollOffset() / (STATUS_FADE_DP * density);
+        float alpha = Math.max(0f, Math.min(1f, 1f - scrolled));
+        statusPanel.setAlpha(alpha);
+        statusDays.setAlpha(alpha);
+    }
+
+    /** Off the main thread. A missing app, a refused query or a broken cursor all read as nothing to show. */
+    private StatusRows.Status readStatus(Uri uri) {
+        List<String[]> rows = new ArrayList<>();
+        try (android.database.Cursor c = getContentResolver().query(uri, STATUS_COLUMNS, null, null, null)) {
+            if (c == null) return StatusRows.EMPTY;
+            int[] col = new int[STATUS_COLUMNS.length];
+            for (int i = 0; i < col.length; i++) col[i] = c.getColumnIndex(STATUS_COLUMNS[i]);
+            while (c.moveToNext() && rows.size() < 32) {
+                String[] r = new String[col.length];
+                for (int i = 0; i < col.length; i++) r[i] = col[i] < 0 || c.isNull(col[i]) ? "" : c.getString(col[i]);
+                rows.add(r);
+            }
+        } catch (RuntimeException e) {
+            return StatusRows.EMPTY;
+        }
+        return StatusRows.from(rows);
+    }
+
+    private void bindStatus(StatusRows.Status s) {
+        if (statusPanel == null) return;
+        boolean line = s.now != null;
+        statusPanel.setVisibility(line || s.alert != null ? View.VISIBLE : View.GONE);
+        ((View) statusIcon.getParent()).setVisibility(line ? View.VISIBLE : View.GONE);
+        if (line) {
+            statusIcon.setImageDrawable(s.now.icon.isEmpty() ? null : new WeatherIcon(s.now.icon));
+            statusIcon.setVisibility(s.now.icon.isEmpty() ? View.GONE : View.VISIBLE);
+            statusTemp.setText(s.now.value);
+            statusText.setText(s.now.title);
+            statusText.setVisibility(s.now.title.isEmpty() ? View.GONE : View.VISIBLE);
+            statusDetail.setText(s.now.detail);
+            statusDetail.setVisibility(s.now.detail.isEmpty() ? View.GONE : View.VISIBLE);
+        }
+        statusBadge.setVisibility(s.badge != null ? View.VISIBLE : View.GONE);
+        if (s.badge != null) statusBadge.setText(s.badge.title);
+        statusAlert.setVisibility(s.alert != null ? View.VISIBLE : View.GONE);
+        if (s.alert != null) statusAlert.setText(s.alert.title);
+
+        statusDays.removeAllViews();
+        statusDays.setVisibility(s.days.isEmpty() ? View.GONE : View.VISIBLE);
+        for (int i = 0; i < s.days.size(); i++) statusDays.addView(dayCard(s.days.get(i), i > 0));
+        fadeStatusWithScroll();   // new rows while the grid is scrolled stay hidden
+    }
+
+    /** Chances at or above this read as a rainy day: the line turns brighter blue. */
+    private static final int WET_CHANCE = 30;
+
+    /** One day, stacked: its short name, the icon, the high, the low dimmed, and the chance of rain if given. */
+    private View dayCard(StatusRows.Row day, boolean gap) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setGravity(Gravity.CENTER_HORIZONTAL);
+        card.setBackgroundResource(R.drawable.status_day);
+        card.setPadding(0, Math.round(8 * density), 0, Math.round(9 * density));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Math.round(75 * density), ViewGroup.LayoutParams.WRAP_CONTENT);
+        if (gap) lp.leftMargin = Math.round(7 * density);
+        card.setLayoutParams(lp);
+
+        TextView name = dayText(day.title, 13, 0xFFC8D2CD, R.font.outfit_medium);
+        name.setLetterSpacing(0.08f);
+        card.addView(name);
+
+        ImageView icon = new ImageView(this);
+        icon.setImageDrawable(new WeatherIcon(day.icon));
+        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(Math.round(36 * density), Math.round(36 * density));
+        ilp.topMargin = Math.round(6 * density);
+        ilp.bottomMargin = Math.round(4 * density);
+        card.addView(icon, ilp);
+
+        card.addView(dayText(day.value, 18, 0xFFFFFFFF, R.font.outfit_regular));
+        if (!day.detail.isEmpty()) card.addView(dayText(day.detail, 14, 0xFF96A0A0, R.font.outfit_light));
+        int chance = day.chancePercent();
+        if (chance >= 0) {
+            int color = chance >= WET_CHANCE ? 0xFF8CBEFF : 0xFF6E8CAF;
+            TextView rain = dayText(day.chance, 12, color, R.font.outfit_medium);
+            WeatherIcon drop = new WeatherIcon("drop");
+            int size = Math.round(10 * density);
+            drop.setBounds(0, 0, size, size);
+            drop.setColorFilter(new android.graphics.PorterDuffColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN));
+            rain.setCompoundDrawables(drop, null, null, null);
+            rain.setCompoundDrawablePadding(Math.round(3 * density));
+            ((LinearLayout.LayoutParams) rain.getLayoutParams()).topMargin = Math.round(3 * density);
+            card.addView(rain);
+        }
+        return card;
+    }
+
+    private TextView dayText(String text, int sp, int color, int font) {
+        TextView t = new TextView(this);
+        t.setText(text);
+        t.setTextColor(color);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
+        t.setTypeface(getResources().getFont(font));
+        t.setIncludeFontPadding(false);
+        t.setSingleLine(true);
+        t.setGravity(Gravity.CENTER);
+        t.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        return t;
     }
 
     // ---- race-weekend panel (a theme's race_calendar) -----------------------------------------------

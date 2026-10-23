@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status badge and alert (StatusRows): amber with dark text, the one warm accent on Home. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#FFFFB032" />
+    <corners android:radius="14dp" />
+</shape>

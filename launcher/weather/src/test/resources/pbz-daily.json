@@ -1,0 +1,216 @@
+{
+ "properties": {
+  "periods": [
+   {
+    "number": 1,
+    "name": "Today",
+    "startTime": "2026-10-22T09:00:00-04:00",
+    "endTime": "2026-10-22T18:00:00-04:00",
+    "isDaytime": true,
+    "temperature": 65,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 0
+    },
+    "shortForecast": "Sunny",
+    "detailedForecast": "Sunny, with a high near 65. North wind 2 to 6 mph."
+   },
+   {
+    "number": 2,
+    "name": "Tonight",
+    "startTime": "2026-10-22T18:00:00-04:00",
+    "endTime": "2026-10-23T06:00:00-04:00",
+    "isDaytime": false,
+    "temperature": 40,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 0
+    },
+    "shortForecast": "Mostly Clear",
+    "detailedForecast": "Mostly clear, with a low around 40. North wind 1 to 5 mph."
+   },
+   {
+    "number": 3,
+    "name": "Friday",
+    "startTime": "2026-10-23T06:00:00-04:00",
+    "endTime": "2026-10-23T18:00:00-04:00",
+    "isDaytime": true,
+    "temperature": 65,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 0
+    },
+    "shortForecast": "Mostly Sunny",
+    "detailedForecast": "Mostly sunny, with a high near 65. Northeast wind 1 to 5 mph."
+   },
+   {
+    "number": 4,
+    "name": "Friday Night",
+    "startTime": "2026-10-23T18:00:00-04:00",
+    "endTime": "2026-10-24T06:00:00-04:00",
+    "isDaytime": false,
+    "temperature": 34,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 0
+    },
+    "shortForecast": "Mostly Clear",
+    "detailedForecast": "Mostly clear, with a low around 34. East wind around 3 mph."
+   },
+   {
+    "number": 5,
+    "name": "Saturday",
+    "startTime": "2026-10-24T06:00:00-04:00",
+    "endTime": "2026-10-24T18:00:00-04:00",
+    "isDaytime": true,
+    "temperature": 67,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 0
+    },
+    "shortForecast": "Sunny",
+    "detailedForecast": "Sunny, with a high near 67. Southeast wind around 2 mph."
+   },
+   {
+    "number": 6,
+    "name": "Saturday Night",
+    "startTime": "2026-10-24T18:00:00-04:00",
+    "endTime": "2026-10-25T06:00:00-04:00",
+    "isDaytime": false,
+    "temperature": 35,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 0
+    },
+    "shortForecast": "Mostly Clear",
+    "detailedForecast": "Mostly clear, with a low around 35."
+   },
+   {
+    "number": 7,
+    "name": "Sunday",
+    "startTime": "2026-10-25T06:00:00-04:00",
+    "endTime": "2026-10-25T18:00:00-04:00",
+    "isDaytime": true,
+    "temperature": 69,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 0
+    },
+    "shortForecast": "Sunny",
+    "detailedForecast": "Sunny, with a high near 69."
+   },
+   {
+    "number": 8,
+    "name": "Sunday Night",
+    "startTime": "2026-10-25T18:00:00-04:00",
+    "endTime": "2026-10-26T06:00:00-04:00",
+    "isDaytime": false,
+    "temperature": 38,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 0
+    },
+    "shortForecast": "Mostly Clear",
+    "detailedForecast": "Mostly clear, with a low around 38."
+   },
+   {
+    "number": 9,
+    "name": "Monday",
+    "startTime": "2026-10-26T06:00:00-04:00",
+    "endTime": "2026-10-26T18:00:00-04:00",
+    "isDaytime": true,
+    "temperature": 70,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 0
+    },
+    "shortForecast": "Sunny",
+    "detailedForecast": "Sunny, with a high near 70."
+   },
+   {
+    "number": 10,
+    "name": "Monday Night",
+    "startTime": "2026-10-26T18:00:00-04:00",
+    "endTime": "2026-10-27T06:00:00-04:00",
+    "isDaytime": false,
+    "temperature": 42,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 0
+    },
+    "shortForecast": "Partly Cloudy",
+    "detailedForecast": "Partly cloudy, with a low around 42."
+   },
+   {
+    "number": 11,
+    "name": "Tuesday",
+    "startTime": "2026-10-27T06:00:00-04:00",
+    "endTime": "2026-10-27T18:00:00-04:00",
+    "isDaytime": true,
+    "temperature": 68,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 2
+    },
+    "shortForecast": "Mostly Sunny",
+    "detailedForecast": "Mostly sunny, with a high near 68."
+   },
+   {
+    "number": 12,
+    "name": "Tuesday Night",
+    "startTime": "2026-10-27T18:00:00-04:00",
+    "endTime": "2026-10-28T06:00:00-04:00",
+    "isDaytime": false,
+    "temperature": 45,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 2
+    },
+    "shortForecast": "Mostly Cloudy",
+    "detailedForecast": "Mostly cloudy, with a low around 45."
+   },
+   {
+    "number": 13,
+    "name": "Wednesday",
+    "startTime": "2026-10-28T06:00:00-04:00",
+    "endTime": "2026-10-28T18:00:00-04:00",
+    "isDaytime": true,
+    "temperature": 67,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 5
+    },
+    "shortForecast": "Partly Sunny",
+    "detailedForecast": "Partly sunny, with a high near 67."
+   },
+   {
+    "number": 14,
+    "name": "Wednesday Night",
+    "startTime": "2026-10-28T18:00:00-04:00",
+    "endTime": "2026-10-29T06:00:00-04:00",
+    "isDaytime": false,
+    "temperature": 42,
+    "temperatureUnit": "F",
+    "probabilityOfPrecipitation": {
+     "unitCode": "wmoUnit:percent",
+     "value": 8
+    },
+    "shortForecast": "Mostly Cloudy",
+    "detailedForecast": "Mostly cloudy, with a low around 42."
+   }
+  ]
+ }
+}

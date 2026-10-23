@@ -170,6 +170,14 @@
          "show_stats": true. Nothing is read, and the clock does not move, while this is false. -->
     <bool name="show_stats">false</bool>
 
+    <!-- Status line: the authority of another app's status provider (docs/specs/status.md), such as the weather
+         module in launcher/weather (io.github.kingshmiley.tvweather.status). Home reads its weather line, badge,
+         alert and day cards while Home is on screen; the launcher itself stays offline. Empty: off, nothing is read.
+         status_query is passed to the provider as is, e.g. its location: lat=40.4406&lon=-79.9959. Both can also
+         be set in a theme's config.json ("status_provider", "status_query"). -->
+    <string name="status_provider" translatable="false"></string>
+    <string name="status_query" translatable="false"></string>
+
     <!-- Time-of-day backdrop behind everything: a dark gradient that follows the clock, with a warm
          horizon glow around sunrise and sunset. 0 keeps the plain background (the default); 1 to 100
          sets its opacity. Around 60 reads clearly without hiding a wallpaper. Can also be set with

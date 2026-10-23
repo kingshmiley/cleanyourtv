@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <!-- The only permission: api.weather.gov. No location, no accounts, nothing else. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="@string/app_name"
+        android:icon="@drawable/icon"
+        android:banner="@drawable/banner"
+        android:allowBackup="false">
+
+        <!-- The full forecast, as a tile in the launcher's grid. Also what makes this app visible to the launcher
+             on Android 11+: the launcher queries LEANBACK_LAUNCHER activities, and a visible package's provider
+             can be read (docs/specs/status.md). -->
+        <activity
+            android:name=".ForecastActivity"
+            android:exported="true"
+            android:screenOrientation="landscape"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Read-only: the weather line, alert and day cards for the location in the query. Public weather, nothing
+             private, so any app may read it; nothing can be written. -->
+        <provider
+            android:name=".StatusProvider"
+            android:authorities="io.github.kingshmiley.tvweather.status"
+            android:exported="true" />
+    </application>
+</manifest>
