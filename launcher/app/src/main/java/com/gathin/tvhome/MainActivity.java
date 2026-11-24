@@ -211,6 +211,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean promptsPaused;
     /** Rebuild the tiles on resume: Home was fully hidden by an app, or Home was pressed. Not after a side panel such as Wi-Fi settings. */
     private boolean rebuildOnResume = true;
+    /** onCreate handed Home to RailActivity and finished; nothing else was set up. */
+    private boolean handedOff;
     /** Between onStop and onStart: Home was fully covered by an app, not just by the translucent quick panel. */
     private boolean stopped;
     /** Between onStart and onStop: Home is (at least partly) on screen. */
@@ -307,10 +309,22 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        density = getResources().getDisplayMetrics().density;
         // config.xml, overlaid by config.json from a pushed theme (see Config and tools/theme.sh).
         Config cfg = Config.load(this);
+        // home_layout "rail": switch on the rail home and hand over to it (docs/rail-home.md). Before any view or
+        // callback exists, so onDestroy has nothing to undo.
+        if (RailActivity.wanted(cfg)) {
+            handedOff = true;
+            // This stays the package's only HOME activity, so every Home press lands here: pass it on without an
+            // animation, so it is not seen.
+            startActivity(new Intent(this, RailActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION));
+            finish();
+            overridePendingTransition(0, 0);
+            return;
+        }
+        setContentView(R.layout.activity_main);
+        density = getResources().getDisplayMetrics().density;
         settingsKeycodes = cfg.settingsKeycodes;
         settingsKeyPanel = cfg.settingsKeyPanel;
         COLUMNS = cfg.columns;
@@ -874,6 +888,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (handedOff) return;
         wallpaperPlayer.close();
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);

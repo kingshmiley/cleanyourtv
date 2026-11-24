@@ -107,4 +107,14 @@
     <!-- Cinematic top shelf (cinematic_home): the line under the focused dock app's name; %1$s is when it was
          last opened, e.g. "5 minutes ago" or "yesterday, 9:40 pm". -->
     <string name="last_opened">Last opened %1$s</string>
+    <!-- Rail home (RailActivity) -->
+    <string name="rail_favorites">FAVORITES</string>
+    <string name="rail_all_apps">ALL APPS</string>
+    <string name="rail_continue">Continue watching · %1$s</string>
+    <string name="rail_featured">Featured · %1$s</string>
+    <string name="rail_ethernet">Ethernet</string>
+    <string name="rail_offline">Not connected</string>
+    <string name="rail_signal_strong">Strong</string>
+    <string name="rail_signal_good">Good</string>
+    <string name="rail_signal_weak">Weak</string>
 </resources>

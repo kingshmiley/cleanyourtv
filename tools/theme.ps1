@@ -26,7 +26,7 @@ $revision = [guid]::NewGuid().ToString('N')
 # accessibility_enabled off, and the service only binds again once the list changes. So restart first, then
 # clear the list, switch accessibility off (some TVs keep the service "crashed" and unbound otherwise), write
 # the list back and switch accessibility on again.
-$restart = "a=`$(settings get secure enabled_accessibility_services); am force-stop $pkg; am start -n $pkg/.MainActivity >/dev/null; case `"`$a`" in *$pkg*) sleep 1; settings put secure enabled_accessibility_services ''; settings put secure accessibility_enabled 0; sleep 1; settings put secure enabled_accessibility_services `"`$a`"; settings put secure accessibility_enabled 1 ;; esac"
+$restart = "a=`$(settings get secure enabled_accessibility_services); am force-stop $pkg; am start -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null; case `"`$a`" in *$pkg*) sleep 1; settings put secure enabled_accessibility_services ''; settings put secure accessibility_enabled 0; sleep 1; settings put secure enabled_accessibility_services `"`$a`"; settings put secure accessibility_enabled 1 ;; esac"
 
 # Some firmware (TCL G07, Android 11) locks the shell out of Android/data. Files are staged in
 # /data/local/tmp and copied in, or written through the launcher's ThemeProvider when that is refused.
@@ -58,6 +58,16 @@ if (Test-Path $wallpapers -PathType Container) {
         if ($_.Name -notmatch '^[A-Za-z0-9_.-]+$') { throw "unsupported wallpaper filename: $($_.Name)" }
         & $py -I b64push.py $_.FullName (Stage "wallpapers/$($_.Name)")
         & $py -I tv.py (Put "wallpapers/$($_.Name)") | Out-Null
+    }
+}
+# Carousel pictures for the rail home, heroes\<package>.jpg (docs/rail-home.md).
+& $py -I tv.py "mkdir -p $dir/heroes 2>/dev/null; rm -f $dir/heroes/* 2>/dev/null; content delete --uri $uri/heroes 2>/dev/null" | Out-Null
+$heroes = Join-Path $Theme 'heroes'
+if (Test-Path $heroes -PathType Container) {
+    Get-ChildItem $heroes -File | Where-Object { $_.Extension -match '^\.(jpg|jpeg|png|webp)$' } | ForEach-Object {
+        if ($_.Name -notmatch '^[A-Za-z0-9_.-]+$') { throw "unsupported hero filename: $($_.Name)" }
+        & $py -I b64push.py $_.FullName (Stage "heroes/$($_.Name)")
+        & $py -I tv.py (Put "heroes/$($_.Name)") | Out-Null
     }
 }
 & $py -I tv.py "printf '%s' '$revision' > $tmp-theme_revision; $(Put 'theme_revision')" | Out-Null

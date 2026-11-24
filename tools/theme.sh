@@ -30,7 +30,7 @@ tv() { "$PY" -I tv.py "$@"; }
 # back and switch accessibility on again as build-and-install does. Some TVs (TCL Smart TV Pro G03, Android 11)
 # also keep the service in their "crashed" list after the force-stop and leave it unbound until accessibility
 # itself goes off and on again, so switch it off with the list cleared and wait a second before writing back.
-RESTART="a=\$(settings get secure enabled_accessibility_services); am force-stop $PKG; am start -n $PKG/.MainActivity >/dev/null; case \"\$a\" in *$PKG*) sleep 1; settings put secure enabled_accessibility_services ''; settings put secure accessibility_enabled 0; sleep 1; settings put secure enabled_accessibility_services \"\$a\"; settings put secure accessibility_enabled 1 ;; esac"
+RESTART="a=\$(settings get secure enabled_accessibility_services); am force-stop $PKG; am start -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null; case \"\$a\" in *$PKG*) sleep 1; settings put secure enabled_accessibility_services ''; settings put secure accessibility_enabled 0; sleep 1; settings put secure enabled_accessibility_services \"\$a\"; settings put secure accessibility_enabled 1 ;; esac"
 
 # Some firmware (TCL G07, Android 11) locks the shell out of Android/data. Files are staged in
 # /data/local/tmp and copied in, or written through the launcher's ThemeProvider when that is refused.
@@ -69,6 +69,20 @@ if [ -d "$THEME/wallpapers" ]; then
         [[ "$NAME" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "unsupported wallpaper filename: $NAME" >&2; exit 1; }
         "$PY" -I b64push.py "$IMAGE" "$(stage "wallpapers/$NAME")"
         tv "$(put "wallpapers/$NAME")" >/dev/null ;;
+    esac
+  done
+fi
+# Carousel pictures for the rail home, heroes/<package>.jpg (docs/rail-home.md).
+tv "mkdir -p $DIR/heroes 2>/dev/null; rm -f $DIR/heroes/* 2>/dev/null; content delete --uri $URI/heroes 2>/dev/null" >/dev/null
+if [ -d "$THEME/heroes" ]; then
+  for IMAGE in "$THEME"/heroes/*; do
+    [ -f "$IMAGE" ] || continue
+    case "$IMAGE" in
+      *.jpg|*.jpeg|*.png|*.webp|*.JPG|*.JPEG|*.PNG|*.WEBP)
+        NAME=$(basename "$IMAGE")
+        [[ "$NAME" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "unsupported hero filename: $NAME" >&2; exit 1; }
+        "$PY" -I b64push.py "$IMAGE" "$(stage "heroes/$NAME")"
+        tv "$(put "heroes/$NAME")" >/dev/null ;;
     esac
   done
 fi

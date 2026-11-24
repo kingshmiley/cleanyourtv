@@ -178,6 +178,11 @@
     <string name="status_provider" translatable="false"></string>
     <string name="status_query" translatable="false"></string>
 
+    <!-- Which home: "classic" (this file's dock and grid) or "rail" (a frosted rail with clock, weather and
+         Inputs / Wi-Fi / Settings, favourites in a carousel over their artwork, every app below; docs/rail-home.md).
+         Also "home_layout" in a theme's config.json. -->
+    <string name="home_layout" translatable="false">classic</string>
+
     <!-- Time-of-day backdrop behind everything: a dark gradient that follows the clock, with a warm
          horizon glow around sunrise and sunset. 0 keeps the plain background (the default); 1 to 100
          sets its opacity. Around 60 reads clearly without hiding a wallpaper. Can also be set with

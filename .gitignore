@@ -21,3 +21,5 @@ launcher/replay_pid*.log
 
 # the TV owner's own theme: its status_query holds the home location. config.example.json is committed instead.
 my-tv/theme/config.json
+# the owner's carousel pictures (photos they do not hold the rights to share)
+my-tv/theme/heroes/

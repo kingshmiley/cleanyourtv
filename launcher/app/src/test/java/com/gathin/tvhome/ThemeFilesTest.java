@@ -20,6 +20,10 @@ public class ThemeFilesTest {
     @Test public void collectionImagesAreAllowed() {
         assertEquals("wallpapers/dusk.jpg", ThemeFiles.path(Arrays.asList("wallpapers", "dusk.jpg")));
         assertEquals("wallpapers/Night_2.WEBP", ThemeFiles.path(Arrays.asList("wallpapers", "Night_2.WEBP")));
+        assertEquals("heroes/com.sportsnetpittsburgh.app.jpg",
+                ThemeFiles.path(Arrays.asList("heroes", "com.sportsnetpittsburgh.app.jpg")));
+        assertNull(ThemeFiles.path(Arrays.asList("heroes", "../config.jpg")));
+        assertTrue(ThemeFiles.isCollection(Collections.singletonList("heroes")));
     }
 
     @Test public void anythingElseIsRefused() {

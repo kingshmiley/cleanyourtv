@@ -132,6 +132,8 @@ final class Config {
     final String statusProvider;
     /** Query string passed to the status provider as is, e.g. its location: "lat=40.27&lon=-80.63". */
     final String statusQuery;
+    /** "classic" (MainActivity) or "rail" (RailActivity, docs/rail-home.md). */
+    final String homeLayout;
 
     private Config(List<String> dockApps, boolean fillDock, List<String> hiddenApps, String liveTvPackage,
                    String liveTvAction, Map<String, String> launchActions, Map<String, String> appLabels,
@@ -143,7 +145,7 @@ final class Config {
                    int wallpaperRotationMinutes, int wallpaperDim, String wallpaperOrder, boolean overlayApplied,
                    Festival festival, int[] inputKeycodes, List<String> appKeys,
                    List<RaceWeekend.Race> raceCalendar, boolean cinematicHome, boolean ambientGlow, int homeIdleClockMinutes,
-                   String statusProvider, String statusQuery) {
+                   String statusProvider, String statusQuery, String homeLayout) {
         this.inputKeycodes = inputKeycodes;
         this.appKeys = Collections.unmodifiableList(appKeys);
         this.dockApps = Collections.unmodifiableList(dockApps);
@@ -196,6 +198,7 @@ final class Config {
         this.homeIdleClockMinutes = homeIdleClockMinutes;
         this.statusProvider = statusProvider;
         this.statusQuery = statusQuery;
+        this.homeLayout = homeLayout;
     }
 
     /** The folder the theme tools push into; null when external storage is unavailable. */
@@ -248,6 +251,7 @@ final class Config {
         int idleClockMinutes = res.getInteger(R.integer.home_idle_clock_minutes);
         String statusProvider = res.getString(R.string.status_provider).trim();
         String statusQuery = res.getString(R.string.status_query).trim();
+        String homeLayout = res.getString(R.string.home_layout).trim();
         boolean applied = false;
 
         File dir = dir(ctx);
@@ -299,6 +303,7 @@ final class Config {
             idleClockMinutes = integer(json, "home_idle_clock_minutes", idleClockMinutes, 0, 1440);
             statusProvider = string(json, "status_provider", statusProvider);
             statusQuery = string(json, "status_query", statusQuery);
+            homeLayout = string(json, "home_layout", homeLayout);
         }
         // A theme push or reset invalidates choices made on the TV. On first use, remember the
         // current theme without clearing choices from an older launcher version.
@@ -358,7 +363,8 @@ final class Config {
                 Math.max(0, Math.min(100, skyIntensity)), settingsKeycodes, settingsKeyPanel, wallpaperEnabled, wallpaper,
                 wallpapers, rotationMinutes, wallpaperDim, wallpaperOrder, applied,
                 festival, inputKeycodes, appKeys, json == null ? Collections.emptyList() : raceCalendar(json), cinematic, ambientGlow,
-                Math.max(0, idleClockMinutes), StatusRows.validAuthority(statusProvider) ? statusProvider : "", statusQuery);
+                Math.max(0, idleClockMinutes), StatusRows.validAuthority(statusProvider) ? statusProvider : "", statusQuery,
+                "rail".equals(homeLayout) ? "rail" : "classic");
     }
 
     /**

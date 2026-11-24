@@ -4,8 +4,16 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
-    <!-- The only permission: api.weather.gov. No location, no accounts, nothing else. -->
+    <!-- api.weather.gov, and the carousel artwork the TV provider points to. No location, no accounts. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Continue Watching and preview rows for the launcher's carousel art (ArtProvider). A runtime permission:
+         granted once with `pm grant io.github.kingshmiley.tvweather android.permission.READ_TV_LISTINGS`. -->
+    <uses-permission android:name="android.permission.READ_TV_LISTINGS" />
+
+    <!-- Only apps signed with the same key (the launcher) may read the art rows: they are the owner's viewing. -->
+    <permission
+        android:name="io.github.kingshmiley.tvweather.permission.READ_ART"
+        android:protectionLevel="signature" />
 
     <application
         android:label="@string/app_name"
@@ -33,5 +41,12 @@
             android:name=".StatusProvider"
             android:authorities="io.github.kingshmiley.tvweather.status"
             android:exported="true" />
+
+        <!-- Carousel artwork (docs/specs/art.md), signature-protected. -->
+        <provider
+            android:name=".ArtProvider"
+            android:authorities="io.github.kingshmiley.tvweather.art"
+            android:exported="true"
+            android:readPermission="io.github.kingshmiley.tvweather.permission.READ_ART" />
     </application>
 </manifest>
