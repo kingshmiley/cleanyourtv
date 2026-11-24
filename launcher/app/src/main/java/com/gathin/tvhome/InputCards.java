@@ -45,21 +45,28 @@ final class InputCards {
     /** Card colours for devices we know; anything else gets the neutral look. */
     static final class Style {
         final int top, bottom, ink, accent, glow;
+        /** top is the centre and bottom the edge of a radial fill, instead of a top-to-bottom one. */
+        final boolean radial;
 
         Style(int top, int bottom, int ink, int accent, int glow) {
+            this(top, bottom, ink, accent, glow, false);
+        }
+
+        Style(int top, int bottom, int ink, int accent, int glow, boolean radial) {
             this.top = top;
             this.bottom = bottom;
             this.ink = ink;
             this.accent = accent;
             this.glow = glow;
+            this.radial = radial;
         }
     }
 
     private static final Map<String, Style> STYLES = new HashMap<>();
 
     static {
-        // The original PlayStation's light grey, for the colourful retro logo.
-        Style ps = new Style(0xFFDEDEE0, 0xFFA8A9AE, 0xFF28282E, 0xFF2882FF, 0);
+        // Grey for the colourful retro logo: lighter behind it, darker toward the corners.
+        Style ps = new Style(0xFFAAABB0, 0xFF525359, 0xFF28282E, 0xFF2882FF, 0, true);
         STYLES.put("playstation-5", ps);
         STYLES.put("playstation-4", ps);
         STYLES.put("playstation", ps);
@@ -147,7 +154,9 @@ final class InputCards {
         Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(bmp);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-        p.setShader(new LinearGradient(0, 0, 0, h, s.top, s.bottom, Shader.TileMode.CLAMP));
+        p.setShader(s.radial
+                ? new RadialGradient(w / 2f, h * 0.45f, w * 0.62f, s.top, s.bottom, Shader.TileMode.CLAMP)
+                : new LinearGradient(0, 0, 0, h, s.top, s.bottom, Shader.TileMode.CLAMP));
         c.drawRect(0, 0, w, h, p);
         p.setShader(null);
         if (s.glow != 0) {

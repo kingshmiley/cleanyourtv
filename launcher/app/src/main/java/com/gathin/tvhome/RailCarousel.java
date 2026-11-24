@@ -32,7 +32,7 @@ final class RailCarousel extends FrameLayout {
 
     /** Scale and brightness by distance from the centre, 0..3. */
     private static final float[] SCALE = {1f, 0.62f, 0.46f, 0.36f};
-    private static final float[] ALPHA = {1f, 0.62f, 0.4f, 0.22f};
+    private static final float[] ALPHA = {1f, 0.67f, 0.47f, 0.31f};
     private final float cardW, cardH, gap, radius, ringPad, ringWidth;
     private final List<ImageView> cards = new ArrayList<>();
     private final Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);

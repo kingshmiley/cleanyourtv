@@ -206,6 +206,7 @@
             android:fontFamily="@font/outfit_medium"
             android:letterSpacing="0.25"
             android:text="@string/rail_favorites"
+            android:visibility="gone"
             android:textColor="#FFDCE0E4"
             android:textSize="8sp" />
 
@@ -302,7 +303,7 @@
             android:layout_height="match_parent"
             android:layout_marginStart="7dp"
             android:layout_marginEnd="8dp"
-            android:layout_marginTop="437dp"
+            android:layout_marginTop="423dp"
             android:clipChildren="false"
             android:clipToPadding="false"
             android:paddingTop="6dp"

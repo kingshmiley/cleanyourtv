@@ -229,7 +229,17 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
                 new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         grid = findViewById(R.id.railGrid);
-        grid.setLayoutManager(new GridLayoutManager(this, COLUMNS));
+        GridLayoutManager glm = new GridLayoutManager(this, COLUMNS);
+        glm.setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
+            @Override
+            public int getSpanSize(int position) {
+                return position < items.size() && items.get(position).type == T_HEADER ? COLUMNS : 1;
+            }
+        });
+        grid.setLayoutManager(glm);
+        loadOrder();
+        findViewById(R.id.allAppsLabel).setVisibility(View.GONE);   // the grid carries its own headers
+        counter.setVisibility(View.GONE);
         grid.setItemAnimator(null);
         adapter = new GridAdapter();
         grid.setAdapter(adapter);
@@ -380,12 +390,8 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
             app.color = AppAdapter.vividColor(banner != null ? banner : app.icon);
             apps.add(app);
         }
-        // All apps: the favourites (dock_apps) first in their order, then the rest alphabetically.
-        apps.sort((a, b) -> {
-            int fa = cfg.dockApps.indexOf(a.pkg), fb = cfg.dockApps.indexOf(b.pkg);
-            if (fa >= 0 || fb >= 0) return fa < 0 ? 1 : fb < 0 ? -1 : Integer.compare(fa, fb);
-            return a.label.compareToIgnoreCase(b.label);
-        });
+        // Alphabetical: the order All apps starts from; after that its saved order wins (loadOrder).
+        apps.sort((a, b) -> a.label.compareToIgnoreCase(b.label));
         adapter.notifyDataSetChanged();
         buildFavourites(false);
     }
@@ -449,7 +455,9 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
             inputs.add(a);
         }
         List<App> used = new ArrayList<>();
-        for (App a : apps) if (!NOT_RECENT.contains(a.pkg) && lastUsed(a.pkg) > 0) used.add(a);
+        for (App a : apps) {
+            if (!NOT_RECENT.contains(a.pkg) && !hiddenKeys.contains(a.pkg) && lastUsed(a.pkg) > 0) used.add(a);
+        }
         used.sort((x, y) -> Long.compare(lastUsed(y.pkg), lastUsed(x.pkg)));
         int room = Math.max(0, CAROUSEL_MAX - inputs.size());
         if (used.size() > room) used = new ArrayList<>(used.subList(0, room));
@@ -470,6 +478,8 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         carousel.setBanners(banners);
         buildDots();
         if (!favourites.isEmpty()) onCarouselFocus(Math.min(carousel.index(), favourites.size() - 1));
+        currentInputs = inputs;
+        buildGrid();
     }
 
     private static String keyOf(App a) {
@@ -570,7 +580,7 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         cwLabel.setVisibility(show ? View.VISIBLE : View.GONE);
         cwRow.setVisibility(show ? View.VISIBLE : View.GONE);
         ((ViewGroup.MarginLayoutParams) allAppsLabel.getLayoutParams()).topMargin = (int) ((show ? 423 : 296) * dp);
-        ((ViewGroup.MarginLayoutParams) grid.getLayoutParams()).topMargin = (int) ((show ? 437 : 310) * dp);
+        ((ViewGroup.MarginLayoutParams) grid.getLayoutParams()).topMargin = (int) ((show ? 423 : 296) * dp);
         allAppsLabel.requestLayout();
         grid.requestLayout();
     }
@@ -722,7 +732,7 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
             // heroes/input-<slug>.jpg, else the card's own colours as a field
             File f = InputCards.themeFile(this, "input", app.input.slug);
             Bitmap b = f == null ? null : decode(Uri.fromFile(f));
-            if (b != null) return new Hero(b, "", 0x60);
+            if (b != null) return new Hero(b, "", 0x40);
             return field(app.banner, "");
         }
         File dir = Config.dir(this);
@@ -1079,9 +1089,36 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
 
     // ---- keys ---------------------------------------------------------------------------------------------
 
+    private boolean longFired;
+
+    private static boolean isSelect(int key) {
+        return key == KeyEvent.KEYCODE_DPAD_CENTER || key == KeyEvent.KEYCODE_ENTER || key == KeyEvent.KEYCODE_NUMPAD_ENTER;
+    }
+
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (event.getAction() == KeyEvent.ACTION_DOWN && move(event.getKeyCode())) return true;
+        int key = event.getKeyCode();
+        if (moving != null && key != KeyEvent.KEYCODE_HOME) return moveKey(event);
+        // OK on a grid tile: a short press opens it, holding it opens the tile's menu.
+        View f = getCurrentFocus();
+        View item = f == null ? null : grid.findContainingItemView(f);
+        if (item != null && isSelect(key)) {
+            int pos = grid.getChildAdapterPosition(item);
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                if (event.getRepeatCount() == 0) longFired = false;
+                else if (!longFired) {
+                    longFired = true;
+                    showTileMenu(pos);
+                }
+                return true;
+            }
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                if (!longFired && !event.isCanceled()) item.performClick();
+                longFired = false;
+                return true;
+            }
+        }
+        if (event.getAction() == KeyEvent.ACTION_DOWN && move(key)) return true;
         return super.dispatchKeyEvent(event);
     }
 
@@ -1094,14 +1131,14 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         if (f == null) return false;
         if (f == carousel) {
             if (key == KeyEvent.KEYCODE_DPAD_LEFT && carousel.index() == 0) return focusRail();
-            if (key == KeyEvent.KEYCODE_DPAD_DOWN) return resumes.isEmpty() ? focusGrid(0) : focusContinue(0);
+            if (key == KeyEvent.KEYCODE_DPAD_DOWN) return resumes.isEmpty() ? focusGrid(firstTile()) : focusContinue(0);
             return key == KeyEvent.KEYCODE_DPAD_UP;
         }
         View cw = cwRow.findContainingItemView(f);
         if (cw != null) {
             int pos = cwRow.getChildAdapterPosition(cw);
             if (key == KeyEvent.KEYCODE_DPAD_UP) return carousel.requestFocus();
-            if (key == KeyEvent.KEYCODE_DPAD_DOWN) return focusGrid(0);
+            if (key == KeyEvent.KEYCODE_DPAD_DOWN) return focusGrid(firstTile());
             if (key == KeyEvent.KEYCODE_DPAD_LEFT && pos == 0) return focusRail();
             return key == KeyEvent.KEYCODE_DPAD_RIGHT && pos == resumes.size() - 1;
         }
@@ -1116,14 +1153,13 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         if (item != null) {
             int pos = grid.getChildAdapterPosition(item);
             if (pos < 0) return false;
-            int col = pos % COLUMNS;
-            if (key == KeyEvent.KEYCODE_DPAD_UP && pos < COLUMNS) {
+            int col = ((GridLayoutManager) grid.getLayoutManager()).getSpanSizeLookup().getSpanIndex(pos, COLUMNS);
+            if (key == KeyEvent.KEYCODE_DPAD_UP && pos - firstTile() < COLUMNS && sectionOf(pos) == items.get(firstTile()).section) {
                 return resumes.isEmpty() ? carousel.requestFocus() : focusContinue(0);
             }
             if (key == KeyEvent.KEYCODE_DPAD_LEFT && col == 0) return focusRail();
-            if (key == KeyEvent.KEYCODE_DPAD_RIGHT && (col == COLUMNS - 1 || pos == apps.size() - 1)) return true;
-            if (key == KeyEvent.KEYCODE_DPAD_DOWN && pos + COLUMNS >= apps.size()
-                    && pos / COLUMNS == (apps.size() - 1) / COLUMNS) return true;
+            if (key == KeyEvent.KEYCODE_DPAD_RIGHT && (col == COLUMNS - 1 || pos + 1 >= items.size()
+                    || items.get(pos + 1).type == T_HEADER)) return true;
         }
         return false;
     }
@@ -1363,10 +1399,237 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         }
     }
 
+    // ---- Favorites and All apps (docs/rail-home.md) -------------------------------------------------------
+
+    private static final int T_HEADER = 0, T_APP = 1, T_HIDDEN = 2;
+
+    /** A grid row: a section header, an app or input tile, or the Hidden apps entry. section 0 Favorites, 1 All apps. */
+    private static final class Item {
+        final int type, section;
+        final String text;
+        final App app;
+
+        Item(int type, int section, String text, App app) {
+            this.type = type;
+            this.section = section;
+            this.text = text;
+            this.app = app;
+        }
+    }
+
+    private final List<Item> items = new ArrayList<>();
+    /** Saved on the TV and never replaced by a theme push: the owner's choices win (docs/rail-home.md). */
+    private final List<String> favKeys = new ArrayList<>(), allKeys = new ArrayList<>();
+    private final Set<String> hiddenKeys = new HashSet<>();
+    private List<App> currentInputs = new ArrayList<>();
+    private android.content.SharedPreferences order;
+    /** The key of the tile being moved, or null. */
+    private String moving;
+
+    private void loadOrder() {
+        order = getSharedPreferences("rail_order", MODE_PRIVATE);
+        favKeys.clear();
+        allKeys.clear();
+        hiddenKeys.clear();
+        if (order.contains("fav")) favKeys.addAll(split(order.getString("fav", "")));
+        else favKeys.addAll(cfg.dockApps);   // first run: the theme's dock_apps
+        allKeys.addAll(split(order.getString("all", "")));
+        hiddenKeys.addAll(split(order.getString("hidden", "")));
+    }
+
+    private static List<String> split(String s) {
+        List<String> out = new ArrayList<>();
+        for (String k : s.split("\n")) if (!k.isEmpty() && !out.contains(k)) out.add(k);
+        return out;
+    }
+
+    private void saveOrder() {
+        order.edit().putString("fav", String.join("\n", favKeys)).putString("all", String.join("\n", allKeys))
+                .putString("hidden", String.join("\n", hiddenKeys)).apply();
+    }
+
+    private Map<String, App> byKey() {
+        Map<String, App> m = new HashMap<>();
+        for (App a : apps) m.put(a.pkg, a);
+        for (App a : currentInputs) m.put(keyOf(a), a);
+        return m;
+    }
+
+    /**
+     * Favorites in their saved order (connected inputs included, each keeping its place), then All apps in theirs
+     * without the favourites; new apps join the end of All apps. Hidden apps leave both and gather in the entry
+     * at the end.
+     */
+    private void buildGrid() {
+        Map<String, App> byKey = byKey();
+        boolean changed = false;
+        for (App in : currentInputs) {
+            if (!favKeys.contains(keyOf(in))) {
+                favKeys.add(keyOf(in));
+                changed = true;
+            }
+        }
+        for (App a : apps) {
+            if (!allKeys.contains(a.pkg)) {
+                allKeys.add(a.pkg);
+                changed = true;
+            }
+        }
+        if (changed) saveOrder();
+        items.clear();
+        List<App> fav = new ArrayList<>();
+        for (String k : favKeys) {
+            App a = byKey.get(k);
+            if (a != null && !hiddenKeys.contains(k)) fav.add(a);
+        }
+        if (!fav.isEmpty()) {
+            items.add(new Item(T_HEADER, 0, getString(R.string.rail_favorites), null));
+            for (App a : fav) items.add(new Item(T_APP, 0, null, a));
+        }
+        items.add(new Item(T_HEADER, 1, getString(R.string.rail_all_apps), null));
+        for (String k : allKeys) {
+            App a = byKey.get(k);
+            if (a == null || a.input != null || favKeys.contains(k) || hiddenKeys.contains(k)) continue;
+            items.add(new Item(T_APP, 1, null, a));
+        }
+        int hidden = 0;
+        for (String k : hiddenKeys) if (byKey.containsKey(k)) hidden++;
+        if (hidden > 0) items.add(new Item(T_HIDDEN, 1, getString(R.string.rail_hidden_apps, hidden), null));
+        adapter.notifyDataSetChanged();
+    }
+
+    private int firstTile() {
+        for (int i = 0; i < items.size(); i++) if (items.get(i).type != T_HEADER) return i;
+        return 0;
+    }
+
+    private int sectionOf(int pos) {
+        return pos >= 0 && pos < items.size() ? items.get(pos).section : -1;
+    }
+
+    private void focusKey(String key) {
+        for (int i = 0; i < items.size(); i++) {
+            App a = items.get(i).app;
+            if (a != null && keyOf(a).equals(key)) {
+                focusGrid(i);
+                return;
+            }
+        }
+    }
+
+    /** The menu on a held OK: Add to / Remove from favorites, Move, Hide and App info; an input only moves. */
+    private void showTileMenu(int pos) {
+        if (pos < 0 || pos >= items.size() || items.get(pos).app == null) return;
+        App app = items.get(pos).app;
+        String key = keyOf(app);
+        List<String> labels = new ArrayList<>();
+        List<Runnable> actions = new ArrayList<>();
+        if (app.input == null) {
+            boolean fav = favKeys.contains(key);
+            labels.add(getString(fav ? R.string.rail_remove_fav : R.string.rail_add_fav));
+            actions.add(() -> {
+                if (fav) favKeys.remove(key);
+                else favKeys.add(key);
+                saveOrder();
+                buildGrid();
+                focusKey(key);
+            });
+        }
+        labels.add(getString(R.string.rail_move));
+        actions.add(() -> {
+            moving = key;
+            buildGrid();
+            focusKey(key);
+        });
+        if (app.input == null) {
+            labels.add(getString(R.string.rail_hide));
+            actions.add(() -> {
+                hiddenKeys.add(key);
+                saveOrder();
+                buildFavourites(false);   // out of the carousel too; rebuilds the grid
+                focusGrid(Math.min(pos, items.size() - 1));
+            });
+            labels.add(getString(R.string.rail_app_info));
+            actions.add(() -> startSafely(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", app.pkg, null))));
+        }
+        new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(app.label)
+                .setItems(labels.toArray(new String[0]), (d, which) -> actions.get(which).run())
+                .show();
+    }
+
+    /** Move mode: the arrows carry the tile within its section, OK or Back puts it down. */
+    private boolean moveKey(KeyEvent e) {
+        if (e.getAction() != KeyEvent.ACTION_DOWN) return true;
+        int k = e.getKeyCode();
+        if (isSelect(k) || k == KeyEvent.KEYCODE_BACK) {
+            String done = moving;
+            moving = null;
+            buildGrid();
+            focusKey(done);
+            return true;
+        }
+        int step = k == KeyEvent.KEYCODE_DPAD_LEFT ? -1 : k == KeyEvent.KEYCODE_DPAD_RIGHT ? 1
+                : k == KeyEvent.KEYCODE_DPAD_UP ? -COLUMNS : k == KeyEvent.KEYCODE_DPAD_DOWN ? COLUMNS : 0;
+        if (step == 0) return true;
+        List<String> list = favKeys.contains(moving) ? favKeys : allKeys;
+        int section = list == favKeys ? 0 : 1;
+        List<String> shown = new ArrayList<>();
+        for (Item it : items) if (it.app != null && it.section == section) shown.add(keyOf(it.app));
+        int i = shown.indexOf(moving), j = Math.max(0, Math.min(shown.size() - 1, i + step));
+        if (i < 0 || j == i) return true;
+        String other = shown.get(j);
+        list.remove(moving);
+        int to = list.indexOf(other);
+        list.add(step > 0 ? to + 1 : to, moving);
+        saveOrder();
+        buildGrid();
+        focusKey(moving);
+        return true;
+    }
+
+    /** The Hidden apps entry: pick one to bring it back. */
+    private void showHidden() {
+        Map<String, App> byKey = byKey();
+        List<String> keys = new ArrayList<>();
+        List<String> labels = new ArrayList<>();
+        for (String k : hiddenKeys) {
+            App a = byKey.get(k);
+            if (a != null) {
+                keys.add(k);
+                labels.add(a.label);
+            }
+        }
+        new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(R.string.rail_unhide_title)
+                .setItems(labels.toArray(new String[0]), (d, which) -> {
+                    hiddenKeys.remove(keys.get(which));
+                    saveOrder();
+                    buildFavourites(false);
+                    focusKey(keys.get(which));
+                })
+                .show();
+    }
+
     private final class GridAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+        @Override
+        public int getItemViewType(int position) {
+            return items.get(position).type;
+        }
+
         @NonNull
         @Override
         public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            if (viewType == T_HEADER) {
+                TextView h = text("", 8f, SUB, R.font.outfit_medium);
+                h.setLetterSpacing(0.25f);
+                h.setPadding((int) (5 * dp), (int) (6 * dp), 0, (int) (8 * dp));
+                h.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT));
+                return new RecyclerView.ViewHolder(h) {
+                };
+            }
             int cell = (parent.getWidth() - parent.getPaddingLeft() - parent.getPaddingRight()) / COLUMNS;
             if (cell <= 0) cell = (int) (110 * dp);
             int gap = (int) (10 * dp), w = cell - gap, h = Math.round(w * 9f / 16f);
@@ -1382,9 +1645,26 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
 
         @Override
         public void onBindViewHolder(@NonNull RecyclerView.ViewHolder h, int position) {
-            App app = apps.get(position);
+            Item it = items.get(position);
+            if (it.type == T_HEADER) {
+                ((TextView) h.itemView).setText(it.text);
+                return;
+            }
             Tile t = (Tile) h.itemView;
-            t.favourite = cfg.dockApps.contains(app.pkg);
+            t.favourite = false;
+            if (it.type == T_HIDDEN) {
+                t.image.setImageDrawable(null);
+                t.image.setBackgroundColor(0xFF22252A);
+                t.label.setGravity(Gravity.CENTER);
+                t.label.setText(it.text);
+                t.setContentDescription(it.text);
+                t.setAlpha(moving == null ? 1f : 0.45f);
+                t.setOnClickListener(v -> showHidden());
+                t.setOnFocusChangeListener(null);
+                return;
+            }
+            App app = it.app;
+            t.label.setGravity(Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM);
             if (app.banner != null) {
                 t.image.setImageDrawable(copy(app.banner));
                 t.image.setBackgroundColor(0);
@@ -1396,6 +1676,7 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
                 t.image.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
                 t.label.setText(app.label);
             }
+            t.setAlpha(moving == null || moving.equals(keyOf(app)) ? 1f : 0.45f);
             t.setContentDescription(app.label);
             t.setOnClickListener(v -> open(app));
             t.setOnFocusChangeListener((v, has) -> {
@@ -1407,7 +1688,7 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
 
         @Override
         public int getItemCount() {
-            return apps.size();
+            return items.size();
         }
     }
 }

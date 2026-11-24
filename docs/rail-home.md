@@ -9,7 +9,11 @@ default and are untouched.
 - **Top right:** the favourites (`dock_apps`) in a carousel. The focused app sits large in the centre; the row
   slides under it. Its name, a line under it and position dots below. Behind it, a picture for that app, faded
   toward the rail and the grid.
-- **Below:** every app, 6 across, alphabetical, favourites included and marked with a dot.
+- **Below:** Continue Watching, then **Favorites** (with every connected HDMI input) and **All apps**, each in
+  its own saved order. Hold OK on a tile for its menu: Add to / Remove from favorites, Move (the arrows carry it
+  within its section, OK or Back puts it down), Hide, App info. Hidden apps gather in an entry at the end of All
+  apps. These choices are saved on the TV and a theme push never replaces them; the theme's `dock_apps` only
+  seeds Favorites the first time.
 - **Adaptive accent:** AM/PM, the counter, the dots, the focus rings and the glow take the focused app's colour.
 
 ## Turning it on

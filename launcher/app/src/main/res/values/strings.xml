@@ -111,6 +111,13 @@
     <string name="rail_favorites">FAVORITES</string>
     <string name="rail_all_apps">ALL APPS</string>
     <string name="rail_continue_watching">CONTINUE WATCHING</string>
+    <string name="rail_hidden_apps">Hidden apps (%1$d)</string>
+    <string name="rail_unhide_title">Show again</string>
+    <string name="rail_add_fav">Add to favorites</string>
+    <string name="rail_remove_fav">Remove from favorites</string>
+    <string name="rail_move">Move</string>
+    <string name="rail_hide">Hide</string>
+    <string name="rail_app_info">App info</string>
     <string name="rail_resume">Resume · %1$s</string>
     <string name="rail_connected">%1$s · Connected</string>
     <string name="rail_continue">Continue watching · %1$s</string>

@@ -173,3 +173,14 @@ permission.
 - The carousel is now recently used apps (Android usage history, granted with
   `appops set com.gathin.tvhome GET_USAGE_STATS allow`) plus connected inputs, newest first; Home focuses the
   first card. Both rows fade at their edges instead of sliding under the rail.
+
+### 11. Favorites / All apps, long-press menu, input card looks
+
+- The grid is split into Favorites (connected inputs included, each keeping its place) and All apps (no
+  favourites; new apps at the end), each reorderable. Hold OK on a tile for Add to / Remove from favorites,
+  Move, Hide and App info; hidden apps gather in a "Hidden apps" entry. Saved on the TV (`rail_order` prefs);
+  the theme's `dock_apps` only seeds Favorites once.
+- Carousel: label and counter removed; side cards partly see-through (0.67 / 0.47 / 0.31).
+- PlayStation 5 card: radial grey behind the retro logo; background `heroes/input-playstation-5.jpg` is the
+  owner's blue PS image, moved up so its logo hides behind the card. Steam Deck: monochrome Steam logo.
+  Theme images stay git-ignored.
