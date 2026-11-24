@@ -130,3 +130,31 @@ permission.
 - Tests: `NwsTest` 9, `StatusRowsTest` 8, all passing. Both apps reinstalled; the weather app's cache was cleared
   with `pm clear io.github.kingshmiley.tvweather` so the new column showed at once; launcher accessibility
   services set again. Checked with screenshots (shots/16, 17).
+
+## 24 November 2026
+
+### 9. Rail home redesign (agreed design: `my-tv/REDESIGN.md`)
+
+- Checked the TV first with a throwaway probe app holding `READ_TV_LISTINGS` (installed, run, uninstalled):
+  20 Continue Watching rows (Hulu, Peacock, Disney+, Netflix, Paramount+, Max) and 310 preview rows, every
+  picture an `https://` address.
+- New in the fork: `RailActivity` with `RailCarousel`, `HeroView` and `RangeBar` ([docs/rail-home.md](../docs/rail-home.md));
+  an art provider in the weather helper ([docs/specs/art.md](../docs/specs/art.md)) behind a signature
+  permission; a `heroes/` theme folder; theme scripts restart Home through the HOME intent instead of
+  `.MainActivity`. 151 unit tests pass.
+- Installed the helper first (`pm grant io.github.kingshmiley.tvweather android.permission.READ_TV_LISTINGS`), then
+  the launcher, so the launcher's `READ_ART` request is granted.
+- Theme: `"home_layout": "rail"`, six favourites (Apple TV and Disney+ added to the four dock apps),
+  `"app_labels": ["com.sportsnetpittsburgh.app=SNP 360"]`, and `heroes/com.sportsnetpittsburgh.app.jpg`
+  (the PNC Park photo; git-ignored, not ours to share).
+- Lessons from the TV: the shell may not enable or disable a component here (`Shell cannot change component
+  state`), and two HOME activities in one package make Android 14 show the "Select a Home app" chooser after an
+  update while `set-home-activity` always picks the first. So `RailActivity` is not a HOME activity:
+  `MainActivity` stays the only one and hands each Home press over without an animation. After a reinstall
+  the key services need switching off and on to bind again (`enabled_accessibility_services` emptied,
+  `accessibility_enabled 0`, then set back).
+- Checked with screenshots (shots/38–44): Hulu shows its Continue Watching picture, YouTube a
+  featured video, SNP 360 the PNC Park photo; cards clip at the column edge; focus moves carousel → grid →
+  rail; Home returns to the rail.
+
+**Undo:** set `"home_layout": "classic"` in `theme/config.json` and push the theme again.
