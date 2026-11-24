@@ -382,7 +382,12 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
             app.color = AppAdapter.vividColor(banner != null ? banner : app.icon);
             apps.add(app);
         }
-        apps.sort((a, b) -> a.label.compareToIgnoreCase(b.label));
+        // All apps: the favourites (dock_apps) first in their order, then the rest alphabetically.
+        apps.sort((a, b) -> {
+            int fa = cfg.dockApps.indexOf(a.pkg), fb = cfg.dockApps.indexOf(b.pkg);
+            if (fa >= 0 || fb >= 0) return fa < 0 ? 1 : fb < 0 ? -1 : Integer.compare(fa, fb);
+            return a.label.compareToIgnoreCase(b.label);
+        });
         adapter.notifyDataSetChanged();
         buildFavourites(false);
     }
@@ -1381,7 +1386,7 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         public void onBindViewHolder(@NonNull RecyclerView.ViewHolder h, int position) {
             App app = apps.get(position);
             Tile t = (Tile) h.itemView;
-            t.favourite = favourites.contains(app);
+            t.favourite = cfg.dockApps.contains(app.pkg);
             if (app.banner != null) {
                 t.image.setImageDrawable(copy(app.banner));
                 t.image.setBackgroundColor(0);
