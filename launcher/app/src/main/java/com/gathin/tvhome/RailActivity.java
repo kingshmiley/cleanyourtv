@@ -240,8 +240,6 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         cwRow.setLayoutManager(new androidx.recyclerview.widget.LinearLayoutManager(this,
                 androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, false));
         cwRow.setItemAnimator(null);
-        cwRow.setHorizontalFadingEdgeEnabled(true);
-        cwRow.setFadingEdgeLength((int) (70 * dp));
         cwAdapter = new CwAdapter();
         cwRow.setAdapter(cwAdapter);
         showContinueRow(false);

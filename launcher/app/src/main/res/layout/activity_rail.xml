@@ -272,7 +272,7 @@
             android:textColor="#FF969AA0"
             android:textSize="8sp" />
 
-        <androidx.recyclerview.widget.RecyclerView
+        <com.gathin.tvhome.FadeRecyclerView
             android:id="@+id/cwRow"
             android:layout_width="match_parent"
             android:layout_height="132dp"
