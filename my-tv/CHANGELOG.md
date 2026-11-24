@@ -158,3 +158,6 @@ permission.
   rail; Home returns to the rail.
 
 **Undo:** set `"home_layout": "classic"` in `theme/config.json` and push the theme again.
+- Owner feedback: cards cut by a hard line beside the rail looked like they slid under it. The carousel now fades
+  its cards out over the outer 90dp on both sides (a DST_OUT gradient over the drawn cards); the focus ring is
+  drawn after the fade. Checked with shots/45.

@@ -36,6 +36,9 @@ final class RailCarousel extends FrameLayout {
     private final float cardW, cardH, gap, radius, ringPad, ringWidth;
     private final List<ImageView> cards = new ArrayList<>();
     private final Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
+    /** Erases the cards toward each edge, so they fade out instead of being cut by a hard line beside the rail. */
+    private final Paint edgeFade = new Paint();
+    private final float fadeWidth;
     private final RectF box = new RectF();
     private Listener listener;
     private float position;          // the index at the centre; fractional while sliding
@@ -52,6 +55,8 @@ final class RailCarousel extends FrameLayout {
         radius = 5 * dp;
         ringPad = 4 * dp;
         ringWidth = 1.5f * dp;
+        fadeWidth = 90 * dp;
+        edgeFade.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT));
         ring.setStyle(Paint.Style.STROKE);
         ring.setStrokeWidth(ringWidth);
         ring.setColor(0xFFFFFFFF);
@@ -201,8 +206,21 @@ final class RailCarousel extends FrameLayout {
     }
 
     @Override
+    protected void onSizeChanged(int w, int h, int ow, int oh) {
+        super.onSizeChanged(w, h, ow, oh);
+        // Opaque at the edges (erasing fully), clear in the middle; one shader across the whole width.
+        float f = Math.min(fadeWidth / Math.max(1, w), 0.45f);
+        edgeFade.setShader(new android.graphics.LinearGradient(0, 0, w, 0,
+                new int[]{0xFF000000, 0x00000000, 0x00000000, 0xFF000000}, new float[]{0f, f, 1f - f, 1f},
+                android.graphics.Shader.TileMode.CLAMP));
+    }
+
+    @Override
     protected void dispatchDraw(Canvas canvas) {
+        int layer = canvas.saveLayer(0, 0, getWidth(), getHeight(), null);
         super.dispatchDraw(canvas);
+        canvas.drawRect(0, 0, getWidth(), getHeight(), edgeFade);
+        canvas.restoreToCount(layer);
         if (cards.isEmpty() || !hasFocus()) return;
         float cx = getWidth() / 2f, cy = getHeight() / 2f;
         float s = lerp(SCALE, Math.abs(index - position));
