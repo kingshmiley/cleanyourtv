@@ -19,6 +19,11 @@
          granted when that helper is installed first and signed with the same key). -->
     <uses-permission android:name="io.github.kingshmiley.tvweather.permission.READ_ART" />
 
+    <!-- The rail home orders its carousel by when apps were last used. Not grantable at runtime: granted once with
+         `appops set com.gathin.tvhome GET_USAGE_STATS allow`; without it the launcher's own record is used. -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+
     <!-- Android 11+ package visibility: lets the launcher list the TV apps it shows as tiles, and the
          apps that declare a module card (docs/specs/card.md). -->
     <queries>

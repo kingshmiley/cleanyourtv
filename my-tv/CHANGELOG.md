@@ -161,3 +161,15 @@ permission.
 - Owner feedback: cards cut by a hard line beside the rail looked like they slid under it. The carousel now fades
   its cards out over the outer 90dp on both sides (a DST_OUT gradient over the drawn cards); the focus ring is
   drawn after the fade. Checked with shots/45.
+
+### 10. Continue Watching, input cards, recent-apps carousel
+
+- Carousel cards about 25% larger. A Continue Watching row between the carousel and All apps (the art helper's
+  `/continue` query: newest first, one entry per show, OK resumes through the row's own intent, only if it opens
+  the app that published it). While the row has focus, the carousel fades out and the top shows the show's art,
+  title and episode.
+- Connected HDMI inputs appear as carousel cards named by HDMI-CEC ("PlayStation 5"), with logo cards and
+  backgrounds from the theme's `heroes/logo-<slug>.png` and `heroes/input-<slug>.jpg` (git-ignored).
+- The carousel is now recently used apps (Android usage history, granted with
+  `appops set com.gathin.tvhome GET_USAGE_STATS allow`) plus connected inputs, newest first; Home focuses the
+  first card. Both rows fade at their edges instead of sliding under the rail.

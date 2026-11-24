@@ -28,8 +28,9 @@ public final class ArtProvider extends ContentProvider {
 
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] args, String sort) {
-        MatrixCursor c = new MatrixCursor(COLUMNS);
         List<String> seg = uri.getPathSegments();
+        if (seg.size() == 1 && "continue".equals(seg.get(0))) return continueRows();
+        MatrixCursor c = new MatrixCursor(COLUMNS);
         if (seg.size() != 2 || !"app".equals(seg.get(0)) || !seg.get(1).matches("[A-Za-z0-9_.]+")) return c;
         String pkg = seg.get(1);
         Art.Pick pick = Art.pick(getContext(), pkg);
@@ -39,6 +40,23 @@ public final class ArtProvider extends ContentProvider {
             c.addRow(new Object[]{pick.kind, pick.title, image});
         }
         c.setNotificationUri(getContext().getContentResolver(), Art.appUri(pkg));
+        return c;
+    }
+
+    private static final String[] CONTINUE_COLUMNS = {"package", "title", "episode", "image", "position", "duration", "intent"};
+
+    /** content://…/continue: the Continue Watching rows, newest first (docs/specs/art.md). */
+    private Cursor continueRows() {
+        MatrixCursor c = new MatrixCursor(CONTINUE_COLUMNS);
+        for (Art.Resume r : Art.continueWatching(getContext())) {
+            String image = "";
+            if (r.url != null) {
+                File f = Art.cached(getContext(), r.url, r.pkg);
+                if (f != null) image = "content://" + Art.AUTHORITY + "/img/" + f.getName().replace(".img", "");
+            }
+            c.addRow(new Object[]{r.pkg, r.title, r.episode, image, r.position, r.duration, r.intent});
+        }
+        c.setNotificationUri(getContext().getContentResolver(), Art.CONTINUE);
         return c;
     }
 

@@ -49,8 +49,8 @@ final class RailCarousel extends FrameLayout {
     RailCarousel(Context ctx) {
         super(ctx);
         float dp = ctx.getResources().getDisplayMetrics().density;
-        cardW = 220 * dp;
-        cardH = 124 * dp;
+        cardW = 280 * dp;
+        cardH = 158 * dp;
         gap = 13 * dp;
         radius = 5 * dp;
         ringPad = 4 * dp;

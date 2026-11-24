@@ -110,6 +110,9 @@
     <!-- Rail home (RailActivity) -->
     <string name="rail_favorites">FAVORITES</string>
     <string name="rail_all_apps">ALL APPS</string>
+    <string name="rail_continue_watching">CONTINUE WATCHING</string>
+    <string name="rail_resume">Resume · %1$s</string>
+    <string name="rail_connected">%1$s · Connected</string>
     <string name="rail_continue">Continue watching · %1$s</string>
     <string name="rail_featured">Featured · %1$s</string>
     <string name="rail_ethernet">Ethernet</string>

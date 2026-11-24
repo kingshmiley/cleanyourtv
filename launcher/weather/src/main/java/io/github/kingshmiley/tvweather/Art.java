@@ -50,6 +50,67 @@ final class Art {
         return Uri.parse("content://" + AUTHORITY + "/app/" + pkg);
     }
 
+    static final Uri CONTINUE = Uri.parse("content://" + AUTHORITY + "/continue");
+    /** Rows in the launcher's Continue Watching row, newest first. */
+    static final int CONTINUE_ROWS = 10;
+
+    /** One Continue Watching entry: what to show and where OK resumes. */
+    static final class Resume {
+        final String pkg, title, episode, url, intent;
+        final long position, duration, engaged;
+
+        Resume(String pkg, String title, String episode, String url, String intent, long position, long duration, long engaged) {
+            this.pkg = pkg;
+            this.title = title;
+            this.episode = episode;
+            this.url = url;
+            this.intent = intent;
+            this.position = position;
+            this.duration = duration;
+            this.engaged = engaged;
+        }
+    }
+
+    /** Every app's Continue Watching rows that can be resumed, newest first, at most {@link #CONTINUE_ROWS}. */
+    static java.util.List<Resume> continueWatching(Context ctx) {
+        String[] cols = {TvContract.WatchNextPrograms.COLUMN_PACKAGE_NAME, TvContract.WatchNextPrograms.COLUMN_TITLE,
+                TvContract.WatchNextPrograms.COLUMN_EPISODE_TITLE, TvContract.WatchNextPrograms.COLUMN_SEASON_DISPLAY_NUMBER,
+                TvContract.WatchNextPrograms.COLUMN_EPISODE_DISPLAY_NUMBER, TvContract.WatchNextPrograms.COLUMN_POSTER_ART_URI,
+                TvContract.WatchNextPrograms.COLUMN_THUMBNAIL_URI, TvContract.WatchNextPrograms.COLUMN_INTENT_URI,
+                TvContract.WatchNextPrograms.COLUMN_LAST_PLAYBACK_POSITION_MILLIS,
+                TvContract.WatchNextPrograms.COLUMN_DURATION_MILLIS,
+                TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS};
+        java.util.List<Resume> out = new java.util.ArrayList<>();
+        try (Cursor c = ctx.getContentResolver().query(TvContract.WatchNextPrograms.CONTENT_URI, cols, null, null, null)) {
+            while (c != null && c.moveToNext()) {
+                String pkg = c.getString(0), intent = c.getString(7);
+                if (pkg == null || intent == null || intent.isEmpty()) continue;   // nothing to resume
+                String ep = episodeLine(c.getString(3), c.getString(4), c.getString(2));
+                out.add(new Resume(pkg, c.getString(1) == null ? "" : c.getString(1).trim(), ep,
+                        picture(c.getString(6), c.getString(5)), intent,
+                        c.isNull(8) ? 0 : c.getLong(8), c.isNull(9) ? 0 : c.getLong(9), c.isNull(10) ? 0 : c.getLong(10)));
+            }
+        } catch (RuntimeException e) {
+            Log.w(TAG, "continue watching: " + e);
+        }
+        out.sort((a, b) -> Long.compare(b.engaged, a.engaged));
+        // Apps publish one row per episode (Max: two episodes of one show); keep the newest per show.
+        java.util.Set<String> shows = new java.util.HashSet<>();
+        out.removeIf(r -> !shows.add(r.pkg + "\n" + r.title.toLowerCase(java.util.Locale.ROOT)));
+        return out.size() > CONTINUE_ROWS ? new java.util.ArrayList<>(out.subList(0, CONTINUE_ROWS)) : out;
+    }
+
+    /** "S2 E24 · The Master Plan", "S2 E24", or the episode title alone. */
+    static String episodeLine(String season, String episode, String episodeTitle) {
+        StringBuilder b = new StringBuilder();
+        if (season != null && !season.trim().isEmpty()) b.append('S').append(season.trim());
+        if (episode != null && !episode.trim().isEmpty()) b.append(b.length() > 0 ? " " : "").append('E').append(episode.trim());
+        if (episodeTitle != null && !episodeTitle.trim().isEmpty()) {
+            b.append(b.length() > 0 ? " · " : "").append(episodeTitle.trim());
+        }
+        return b.toString();
+    }
+
     /**
      * The app's newest Continue Watching row, else its first preview programme with a picture; null if neither.
      * Selections are refused without ACCESS_ALL_EPG_DATA, so the whole table is read and filtered here.
@@ -116,6 +177,7 @@ final class Art {
                     download(url, f);
                     trim(f.getParentFile());
                     ctx.getContentResolver().notifyChange(appUri(pkg), null);
+                    ctx.getContentResolver().notifyChange(CONTINUE, null);
                 } catch (IOException | RuntimeException e) {
                     Log.w(TAG, "download failed: " + e);
                 } finally {

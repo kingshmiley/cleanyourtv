@@ -54,10 +54,14 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import android.media.tv.TvContract;
+
 import java.io.File;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -85,6 +89,8 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         final ComponentName component;
         final Drawable banner, icon;
         int color;
+        /** Set for an HDMI input in the carousel; pkg is then "input:<slug>". */
+        InputCards.Device input;
 
         App(String pkg, String label, ComponentName component, Drawable banner, Drawable icon) {
             this.pkg = pkg;
@@ -92,6 +98,26 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
             this.component = component;
             this.banner = banner;
             this.icon = icon;
+        }
+    }
+
+    /** One Continue Watching entry from the art helper (docs/specs/art.md). */
+    static final class Resume {
+        final String pkg, title, episode, image, intent;
+        final long position, duration;
+
+        Resume(String pkg, String title, String episode, String image, String intent, long position, long duration) {
+            this.pkg = pkg;
+            this.title = title;
+            this.episode = episode;
+            this.image = image;
+            this.intent = intent;
+            this.position = position;
+            this.duration = duration;
+        }
+
+        String key() {
+            return "cw:" + pkg + ":" + title + ":" + episode;
         }
     }
 
@@ -115,6 +141,12 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
     private float dp;
     private final List<App> apps = new ArrayList<>();
     private final List<App> favourites = new ArrayList<>();
+    private final List<Resume> resumes = new ArrayList<>();
+    private RecyclerView cwRow;
+    private CwAdapter cwAdapter;
+    private View cwLabel, allAppsLabel;
+    private final ExecutorService cwWorker = Executors.newSingleThreadExecutor();
+    private TvInputManager.TvInputCallback inputCallback;
     private RailCarousel carousel;
     private HeroView hero;
     private RecyclerView grid;
@@ -191,7 +223,7 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         carousel.setAnimate(animations);
         carousel.setListener(this);
         carousel.setOnFocusChangeListener((v, has) -> {
-            if (has && carousel.count() > 0) setAccent(favourites.get(carousel.index()).color);
+            if (has) restoreCarouselHeader();
         });
         ((FrameLayout) findViewById(R.id.carouselHolder)).addView(carousel,
                 new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -202,9 +234,44 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         adapter = new GridAdapter();
         grid.setAdapter(adapter);
 
+        cwLabel = findViewById(R.id.cwLabel);
+        allAppsLabel = findViewById(R.id.allAppsLabel);
+        cwRow = findViewById(R.id.cwRow);
+        cwRow.setLayoutManager(new androidx.recyclerview.widget.LinearLayoutManager(this,
+                androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, false));
+        cwRow.setItemAnimator(null);
+        cwRow.setHorizontalFadingEdgeEnabled(true);
+        cwRow.setFadingEdgeLength((int) (70 * dp));
+        cwAdapter = new CwAdapter();
+        cwRow.setAdapter(cwAdapter);
+        showContinueRow(false);
+
         buildRows();
         loadApps();
         setAccent(accent);
+
+        // Plugging something in or unplugging it adds or removes its card.
+        TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
+        if (tim != null) {
+            inputCallback = new TvInputManager.TvInputCallback() {
+                @Override
+                public void onInputStateChanged(String inputId, int state) {
+                    buildFavourites(false);
+                    updateInputs();
+                }
+
+                @Override
+                public void onInputAdded(String inputId) {
+                    buildFavourites(false);
+                }
+
+                @Override
+                public void onInputRemoved(String inputId) {
+                    buildFavourites(false);
+                }
+            };
+            tim.registerCallback(inputCallback, main);
+        }
 
         IntentFilter f = new IntentFilter();
         f.addAction(Intent.ACTION_PACKAGE_ADDED);
@@ -230,12 +297,9 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        // Home while Home is showing: back to the first favourite, the grid back to its top.
-        if (hasWindowFocus() && carousel.count() > 0) {
-            grid.scrollToPosition(0);
-            carousel.select(0, true);
-            carousel.requestFocus();
-        }
+        // Home, also from inside an app (the window has no focus yet then): onResume rebuilds and focuses the
+        // carousel; this covers Home pressed while Home is already showing.
+        goHome();
     }
 
     @Override
@@ -246,20 +310,27 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         updateNetwork();
         main.postDelayed(minute, 60_000L);
         startStatus();
+        refreshRecents(true);
         artObserver = new ContentObserver(main) {
             @Override
             public void onChange(boolean selfChange, Uri uri) {
-                // A picture finished downloading: drop that app's entry and show it if it is in front.
-                String pkg = uri == null ? null : uri.getLastPathSegment();
-                if (pkg != null) heroes.remove(pkg);
-                if (pkg != null && pkg.equals(heroPkg)) loadHero(pkg, false);
+                // A picture finished downloading: drop that entry and show it if it is in front.
+                String last = uri == null ? null : uri.getLastPathSegment();
+                if ("continue".equals(last)) {
+                    loadContinue();
+                    return;
+                }
+                if (last != null) heroes.remove(last);
+                if (last != null && last.equals(heroPkg)) loadHero(last, false);
             }
         };
         try {
             getContentResolver().registerContentObserver(Uri.parse("content://" + ART_AUTHORITY + "/app"), true, artObserver);
+            getContentResolver().registerContentObserver(Uri.parse("content://" + ART_AUTHORITY + "/continue"), false, artObserver);
         } catch (SecurityException e) {
             artObserver = null;
         }
+        loadContinue();
         if (heroPkg != null) {
             heroes.remove(heroPkg);   // a show watched since may have a new Continue Watching picture
             loadHero(heroPkg, false);
@@ -281,6 +352,9 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         if (handedBack) return;
         unregisterReceiver(packages);
         heroWorker.shutdownNow();
+        cwWorker.shutdownNow();
+        TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
+        if (tim != null && inputCallback != null) tim.unregisterCallback(inputCallback);
     }
 
     @Override
@@ -309,16 +383,114 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
             apps.add(app);
         }
         apps.sort((a, b) -> a.label.compareToIgnoreCase(b.label));
-        favourites.clear();
-        for (String pkg : cfg.dockApps) {
-            for (App a : apps) if (a.pkg.equals(pkg)) favourites.add(a);
+        adapter.notifyDataSetChanged();
+        buildFavourites(false);
+    }
+
+    /** At most this many cards in the carousel, and at least this many (topped up from dock_apps). */
+    private static final int CAROUSEL_MAX = 8, CAROUSEL_MIN = 5;
+    private static final long RECENT_WINDOW = 30L * 24 * 60 * 60 * 1000;
+    /** Never carousel cards: places you pass through rather than go back to. */
+    private static final Set<String> NOT_RECENT = new HashSet<>(java.util.Arrays.asList(
+            "com.android.tv.settings", "io.github.kingshmiley.tvweather"));
+    /** Package -> last time used, from Android's usage history (PACKAGE_USAGE_STATS, granted with appops). */
+    private final Map<String, Long> recent = new HashMap<>();
+
+    /** Off the main thread: reads the usage history, then rebuilds the carousel on the main thread. */
+    private void refreshRecents(boolean toFirst) {
+        cwWorker.execute(() -> {
+            Map<String, Long> m = new HashMap<>();
+            try {
+                android.app.usage.UsageStatsManager um =
+                        (android.app.usage.UsageStatsManager) getSystemService(USAGE_STATS_SERVICE);
+                long now = System.currentTimeMillis();
+                List<android.app.usage.UsageStats> stats = um == null ? null
+                        : um.queryUsageStats(android.app.usage.UsageStatsManager.INTERVAL_BEST, now - RECENT_WINDOW, now);
+                if (stats != null) {
+                    for (android.app.usage.UsageStats u : stats) {
+                        if (u.getTotalTimeInForeground() > 0) m.merge(u.getPackageName(), u.getLastTimeUsed(), Math::max);
+                    }
+                }
+            } catch (RuntimeException ignored) {   // no permission: the launcher's own record still orders
+            }
+            main.post(() -> {
+                recent.clear();
+                recent.putAll(m);
+                buildFavourites(toFirst);
+                if (toFirst) goHome();
+            });
+        });
+    }
+
+    /** When the app (or "input:<slug>") was last used: the later of Android's history and the launcher's record. */
+    private long lastUsed(String key) {
+        Long t = recent.get(key);
+        return Math.max(t == null ? 0 : t, LastOpened.get(this, key));
+    }
+
+    /**
+     * The carousel: recently used apps, newest first, with every connected HDMI input placed by when it was last
+     * switched to (never: last). Topped up from dock_apps while it has fewer than CAROUSEL_MIN cards.
+     */
+    private void buildFavourites(boolean toFirst) {
+        String keep = carousel.count() > 0 && carousel.index() < favourites.size()
+                ? favourites.get(carousel.index()).pkg : null;
+        List<App> inputs = new ArrayList<>();
+        int w = Math.round(280 * dp * 2), h = Math.round(158 * dp * 2);
+        for (InputCards.Device d : InputCards.connected(this)) {
+            android.graphics.Bitmap card = InputCards.card(this, d, w, h, getDrawable(R.drawable.ic_input));
+            App a = new App("input:" + d.slug + ":" + d.portId.hashCode(), d.name, null,
+                    new BitmapDrawable(getResources(), card), null);
+            a.input = d;
+            a.color = InputCards.style(d.slug).accent;
+            inputs.add(a);
         }
+        List<App> used = new ArrayList<>();
+        for (App a : apps) if (!NOT_RECENT.contains(a.pkg) && lastUsed(a.pkg) > 0) used.add(a);
+        used.sort((x, y) -> Long.compare(lastUsed(y.pkg), lastUsed(x.pkg)));
+        int room = Math.max(0, CAROUSEL_MAX - inputs.size());
+        if (used.size() > room) used = new ArrayList<>(used.subList(0, room));
+        for (String pkg : cfg.dockApps) {
+            if (used.size() + inputs.size() >= CAROUSEL_MIN) break;
+            for (App a : apps) if (a.pkg.equals(pkg) && !used.contains(a)) used.add(a);
+        }
+        favourites.clear();
+        favourites.addAll(used);
+        favourites.addAll(inputs);
+        // A stable sort keeps the top-up apps (time 0) in dock order, after everything used.
+        favourites.sort((x, y) -> Long.compare(lastUsed(keyOf(y)), lastUsed(keyOf(x))));
         List<Drawable> banners = new ArrayList<>();
         for (App a : favourites) banners.add(copy(a.banner != null ? a.banner : a.icon));
+        int index = 0;
+        if (!toFirst) for (int i = 0; i < favourites.size(); i++) if (favourites.get(i).pkg.equals(keep)) index = i;
+        carousel.select(index, false);
         carousel.setBanners(banners);
         buildDots();
-        adapter.notifyDataSetChanged();
         if (!favourites.isEmpty()) onCarouselFocus(Math.min(carousel.index(), favourites.size() - 1));
+    }
+
+    private static String keyOf(App a) {
+        return a.input != null ? "input:" + a.input.slug : a.pkg;
+    }
+
+    /** Home: the first (most recent) card focused, both rows back at their start, the carousel shown. */
+    private void goHome() {
+        grid.scrollToPosition(0);
+        cwRow.scrollToPosition(0);
+        showCarousel(true);
+        if (carousel.count() == 0) return;
+        carousel.select(0, false);
+        carousel.post(carousel::requestFocus);
+    }
+
+    /** The carousel fades out while Continue Watching has focus, so the show's art fills the top. */
+    private void showCarousel(boolean on) {
+        float alpha = on ? 1f : 0f;
+        for (View v : new View[]{carousel, dots, counter}) {
+            v.animate().cancel();
+            if (animations) v.animate().alpha(alpha).setDuration(220).start();
+            else v.setAlpha(alpha);
+        }
     }
 
     private Drawable banner(PackageManager pm, ResolveInfo ri) {
@@ -341,6 +513,11 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
     }
 
     private void open(App app) {
+        if (app.input != null) {
+            openInput(app.input.portId);
+            LastOpened.record(this, "input:" + app.input.slug);
+            return;
+        }
         Intent i = getPackageManager().getLeanbackLaunchIntentForPackage(app.pkg);
         if (i == null) i = new Intent(Intent.ACTION_MAIN).setComponent(app.component);
         try {
@@ -350,6 +527,100 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         }
     }
 
+    /** Switches to an HDMI input through the Live TV app, as MainActivity's Inputs menu does. */
+    private void openInput(String inputId) {
+        Uri uri = TvContract.buildChannelUriForPassthroughInput(inputId);
+        startSafely(new Intent(Intent.ACTION_VIEW).setDataAndType(uri, "vnd.android.cursor.item/channel"));
+    }
+
+    // ---- Continue Watching --------------------------------------------------------------------------------
+
+    private void loadContinue() {
+        cwWorker.execute(() -> {
+            List<Resume> found = new ArrayList<>();
+            try (Cursor c = getContentResolver().query(Uri.parse("content://" + ART_AUTHORITY + "/continue"),
+                    new String[]{"package", "title", "episode", "image", "position", "duration", "intent"}, null, null, null)) {
+                while (c != null && c.moveToNext() && found.size() < 10) {
+                    String pkg = c.getString(0);
+                    if (pkg == null || appByPackage(pkg) == null) continue;   // only apps that are installed and shown
+                    found.add(new Resume(pkg, StatusRows.clean(c.getString(1), 40), StatusRows.clean(c.getString(2), 40),
+                            c.getString(3), c.getString(6), c.getLong(4), c.getLong(5)));
+                }
+            } catch (RuntimeException ignored) {   // helper missing or no permission: no row
+            }
+            main.post(() -> {
+                resumes.clear();
+                resumes.addAll(found);
+                cwAdapter.notifyDataSetChanged();
+                showContinueRow(!resumes.isEmpty());
+            });
+        });
+    }
+
+    private App appByPackage(String pkg) {
+        for (App a : apps) if (a.pkg.equals(pkg)) return a;
+        return null;
+    }
+
+    /** With no rows the label and row go and All apps moves up into their place. */
+    private void showContinueRow(boolean show) {
+        cwLabel.setVisibility(show ? View.VISIBLE : View.GONE);
+        cwRow.setVisibility(show ? View.VISIBLE : View.GONE);
+        ((ViewGroup.MarginLayoutParams) allAppsLabel.getLayoutParams()).topMargin = (int) ((show ? 423 : 296) * dp);
+        ((ViewGroup.MarginLayoutParams) grid.getLayoutParams()).topMargin = (int) ((show ? 437 : 310) * dp);
+        allAppsLabel.requestLayout();
+        grid.requestLayout();
+    }
+
+    /**
+     * Resumes the episode through the row's own intent. The intent must open the app that published the row:
+     * one app cannot use the row to start another. Anything else opens the app instead.
+     */
+    private void resume(Resume r) {
+        App app = appByPackage(r.pkg);
+        try {
+            Intent i = Intent.parseUri(r.intent, Intent.URI_INTENT_SCHEME);
+            String target = i.getComponent() != null ? i.getComponent().getPackageName() : i.getPackage();
+            if (target == null) i.setPackage(r.pkg);
+            else if (!target.equals(r.pkg)) throw new IllegalArgumentException("row for " + r.pkg + " opens " + target);
+            i.setSelector(null);
+            startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            LastOpened.record(this, r.pkg);
+        } catch (Exception e) {
+            if (app != null) open(app);
+        }
+    }
+
+    private void onResumeFocused(Resume r) {
+        App app = appByPackage(r.pkg);
+        showCarousel(false);
+        favName.setText(r.title);
+        String on = app == null ? "" : app.label;
+        favSub.setText(r.episode.isEmpty() ? on : on.isEmpty() ? r.episode : r.episode + " \u00B7 " + on);
+        if (app != null) setAccent(app.color);
+        heroPkg = r.key();
+        Hero cached = heroes.get(r.key());
+        if (cached != null) {
+            hero.show(cached.bitmap, cached.dim, animations);
+            return;
+        }
+        heroWorker.execute(() -> {
+            android.graphics.Bitmap b = r.image == null || !r.image.startsWith("content://" + ART_AUTHORITY + "/img/")
+                    ? null : decode(Uri.parse(r.image));
+            Hero h = new Hero(b, "", 0xB4);
+            main.post(() -> {
+                if (b != null) heroes.put(r.key(), h);
+                if (r.key().equals(heroPkg)) hero.show(b, 0xB4, animations);
+            });
+        });
+    }
+
+    /** Back on the carousel: its name, line and picture again. */
+    private void restoreCarouselHeader() {
+        showCarousel(true);
+        if (carousel.count() > 0) onCarouselFocus(carousel.index());
+    }
+
     // ---- carousel -----------------------------------------------------------------------------------------
 
     @Override
@@ -357,7 +628,7 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         if (index < 0 || index >= favourites.size()) return;
         App app = favourites.get(index);
         favName.setText(app.label);
-        favSub.setText(lastOpenedLine(app.pkg));
+        favSub.setText(app.input != null ? getString(R.string.rail_connected, app.input.port) : lastOpenedLine(app.pkg));
         counter.setText(String.format(Locale.ROOT, "%02d / %02d", index + 1, favourites.size()));
         for (int i = 0; i < dots.getChildCount(); i++) styleDot(dots.getChildAt(i), i == index);
         setAccent(app.color);
@@ -428,6 +699,8 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
 
     private void showHero(String pkg, Hero h, boolean animate) {
         hero.show(h == null ? null : h.bitmap, h == null ? 0 : h.dim, animate && animations);
+        App app = appFor(pkg);
+        if (app != null && app.input != null) return;   // its line is the port, set already
         String line = h != null && !h.line.isEmpty() ? h.line : lastOpenedLine(pkg);
         favSub.setText(line);
     }
@@ -442,6 +715,13 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
      * art helper's Continue Watching or preview picture, then a field made from the app's own banner.
      */
     private Hero makeHero(String pkg, App app) {
+        if (app != null && app.input != null) {
+            // heroes/input-<slug>.jpg, else the card's own colours as a field
+            File f = InputCards.themeFile(this, "input", app.input.slug);
+            Bitmap b = f == null ? null : decode(Uri.fromFile(f));
+            if (b != null) return new Hero(b, "", 0x60);
+            return field(app.banner, "");
+        }
         File dir = Config.dir(this);
         if (dir != null) {
             for (String ext : new String[]{"jpg", "jpeg", "png", "webp"}) {
@@ -467,13 +747,16 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
             }
         } catch (RuntimeException ignored) {   // helper missing, no permission, or a bad row: fall back
         }
-        Drawable d = app == null ? null : app.banner;
+        return field(app == null ? null : app.banner, line);
+    }
+
+    /** No picture: the banner enlarged with filtering, so the few pixels left become a soft field of its colours. */
+    private Hero field(Drawable d, String line) {
         if (d == null) return new Hero(null, line, 0);
         Bitmap small = Bitmap.createBitmap(48, 27, Bitmap.Config.ARGB_8888);
         Drawable copy = copy(d);
         copy.setBounds(0, 0, 48, 27);
         copy.draw(new Canvas(small));
-        // Enlarged with filtering, the few pixels left become a soft field of the banner's colours.
         Bitmap field = Bitmap.createScaledBitmap(Bitmap.createScaledBitmap(small, 12, 7, true), 480, 270, true);
         small.recycle();
         return new Hero(field, line, 0x60);
@@ -537,6 +820,12 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         Tile.accent = color;
         View f = grid.getFocusedChild();
         if (f != null) f.invalidate();
+        View c = cwRow.getFocusedChild();
+        if (c != null) {
+            View[] v = (View[]) c.getTag();
+            v[0].invalidate();
+            v[1].invalidate();
+        }
         drawGlow(color);
     }
 
@@ -626,22 +915,14 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         return t;
     }
 
-    /** "PS5 · HDMI 1" for the first connected HDMI input with a name the owner gave it, else its port name. */
+    /** "PlayStation 5 · HDMI 1": the first connected input by the name it gives itself, else its port name. */
     private void updateInputs() {
+        List<InputCards.Device> on = InputCards.connected(this);
         String detail = "";
-        try {
-            TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
-            if (tim != null) {
-                for (TvInputInfo info : tim.getTvInputList()) {
-                    if (info.getType() != TvInputInfo.TYPE_HDMI || info.isHidden(this)) continue;
-                    if (tim.getInputState(info.getId()) != TvInputManager.INPUT_STATE_CONNECTED) continue;
-                    CharSequence custom = info.loadCustomLabel(this), port = info.loadLabel(this);
-                    detail = custom != null && custom.length() > 0 && !custom.toString().contentEquals(port)
-                            ? custom + " · " + port : String.valueOf(port);
-                    break;
-                }
-            }
-        } catch (RuntimeException ignored) {
+        if (!on.isEmpty()) {
+            InputCards.Device d = on.get(0);
+            detail = d.name.equals(d.port) ? d.port : d.name + " \u00B7 " + d.port;
+            if (on.size() > 1) detail = d.name + " +" + (on.size() - 1);
         }
         inputsDetail.setText(detail);
     }
@@ -810,8 +1091,16 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         if (f == null) return false;
         if (f == carousel) {
             if (key == KeyEvent.KEYCODE_DPAD_LEFT && carousel.index() == 0) return focusRail();
-            if (key == KeyEvent.KEYCODE_DPAD_DOWN) return focusGrid(0);
+            if (key == KeyEvent.KEYCODE_DPAD_DOWN) return resumes.isEmpty() ? focusGrid(0) : focusContinue(0);
             return key == KeyEvent.KEYCODE_DPAD_UP;
+        }
+        View cw = cwRow.findContainingItemView(f);
+        if (cw != null) {
+            int pos = cwRow.getChildAdapterPosition(cw);
+            if (key == KeyEvent.KEYCODE_DPAD_UP) return carousel.requestFocus();
+            if (key == KeyEvent.KEYCODE_DPAD_DOWN) return focusGrid(0);
+            if (key == KeyEvent.KEYCODE_DPAD_LEFT && pos == 0) return focusRail();
+            return key == KeyEvent.KEYCODE_DPAD_RIGHT && pos == resumes.size() - 1;
         }
         int row = railRows.indexOf(f);
         if (row >= 0) {
@@ -825,7 +1114,9 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
             int pos = grid.getChildAdapterPosition(item);
             if (pos < 0) return false;
             int col = pos % COLUMNS;
-            if (key == KeyEvent.KEYCODE_DPAD_UP && pos < COLUMNS) return carousel.requestFocus();
+            if (key == KeyEvent.KEYCODE_DPAD_UP && pos < COLUMNS) {
+                return resumes.isEmpty() ? carousel.requestFocus() : focusContinue(0);
+            }
             if (key == KeyEvent.KEYCODE_DPAD_LEFT && col == 0) return focusRail();
             if (key == KeyEvent.KEYCODE_DPAD_RIGHT && (col == COLUMNS - 1 || pos == apps.size() - 1)) return true;
             if (key == KeyEvent.KEYCODE_DPAD_DOWN && pos + COLUMNS >= apps.size()
@@ -836,6 +1127,17 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
 
     private boolean focusRail() {
         return !railRows.isEmpty() && railRows.get(0).requestFocus();
+    }
+
+    private boolean focusContinue(int pos) {
+        RecyclerView.ViewHolder h = cwRow.findViewHolderForAdapterPosition(pos);
+        if (h != null) return h.itemView.requestFocus();
+        cwRow.scrollToPosition(pos);
+        cwRow.post(() -> {
+            RecyclerView.ViewHolder later = cwRow.findViewHolderForAdapterPosition(pos);
+            if (later != null) later.itemView.requestFocus();
+        });
+        return true;
     }
 
     private boolean focusGrid(int pos) {
@@ -860,6 +1162,7 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         final ImageView image;
         final TextView label;
         boolean favourite;
+        private boolean ringed;
         private final float d;
 
         Tile(Context ctx) {
@@ -891,9 +1194,15 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         @Override
         protected void onFocusChanged(boolean gained, int direction, android.graphics.Rect previous) {
             super.onFocusChanged(gained, direction, previous);
-            float s = gained ? 1.07f : 1f;
+            showRing(gained);
+        }
+
+        /** Grows and rings the tile; a Continue Watching card calls it when its column takes focus. */
+        void showRing(boolean on) {
+            ringed = on;
+            float s = on ? 1.07f : 1f;
             animate().scaleX(s).scaleY(s).setDuration(140).start();
-            setTranslationZ(gained ? 2 : 0);
+            setTranslationZ(on ? 2 : 0);
             invalidate();
         }
 
@@ -901,15 +1210,153 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
         protected void dispatchDraw(Canvas c) {
             super.dispatchDraw(c);
             if (favourite) {
-                dot.setColor(isFocused() ? accent : 0xCCFFFFFF);
+                dot.setColor(ringed ? accent : 0xCCFFFFFF);
                 c.drawCircle(getWidth() - 6 * d, 6 * d, 2.5f * d, dot);
             }
-            if (isFocused()) {
+            if (ringed) {
                 float p = 3.5f * d;
                 ring.setColor(accent);
                 box.set(-p, -p, getWidth() + p, getHeight() + p);
                 c.drawRoundRect(box, 4 * d + p, 4 * d + p, ring);
             }
+        }
+    }
+
+    /** A Continue Watching card: the show's picture, the app's banner as a badge, progress, title and episode. */
+    private final class CwAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+        @NonNull
+        @Override
+        public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            LinearLayout col = new LinearLayout(parent.getContext());
+            col.setOrientation(LinearLayout.VERTICAL);
+            col.setClipChildren(false);
+            Tile t = new Tile(parent.getContext());
+            t.setFocusable(false);
+            col.addView(t, new LinearLayout.LayoutParams((int) (150 * dp), (int) (84 * dp)));
+            View track = new View(parent.getContext());
+            FrameLayout.LayoutParams tl = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) (2.5f * dp),
+                    Gravity.BOTTOM);
+            tl.leftMargin = tl.rightMargin = (int) (6 * dp);
+            tl.bottomMargin = (int) (5 * dp);
+            t.addView(track, tl);
+            ImageView badge = new ImageView(parent.getContext());
+            badge.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            badge.setClipToOutline(true);
+            badge.setOutlineProvider(new ViewOutlineProvider() {
+                @Override
+                public void getOutline(View v, Outline o) {
+                    o.setRoundRect(0, 0, v.getWidth(), v.getHeight(), 2 * dp);
+                }
+            });
+            FrameLayout.LayoutParams bl = new FrameLayout.LayoutParams((int) (23 * dp), (int) (13 * dp));
+            bl.leftMargin = bl.topMargin = (int) (5 * dp);
+            t.addView(badge, bl);
+            TextView title = text("", 8.5f, INK, R.font.outfit_medium);
+            LinearLayout.LayoutParams ttl = new LinearLayout.LayoutParams((int) (150 * dp), ViewGroup.LayoutParams.WRAP_CONTENT);
+            ttl.topMargin = (int) (6 * dp);
+            col.addView(title, ttl);
+            TextView ep = text("", 7f, SUB, R.font.outfit_regular);
+            LinearLayout.LayoutParams el = new LinearLayout.LayoutParams((int) (150 * dp), ViewGroup.LayoutParams.WRAP_CONTENT);
+            el.topMargin = (int) (2 * dp);
+            col.addView(ep, el);
+            col.setFocusable(true);
+            col.setTag(new View[]{t, track, badge, title, ep});
+            RecyclerView.LayoutParams lp = new RecyclerView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.rightMargin = (int) (13 * dp);
+            col.setLayoutParams(lp);
+            return new RecyclerView.ViewHolder(col) {
+            };
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull RecyclerView.ViewHolder h, int position) {
+            Resume r = resumes.get(position);
+            View[] v = (View[]) h.itemView.getTag();
+            Tile t = (Tile) v[0];
+            App app = appByPackage(r.pkg);
+            t.image.setImageDrawable(null);
+            t.image.setBackgroundColor(0xFF1E2126);
+            t.label.setText(r.image == null || r.image.isEmpty() ? r.title : "");
+            if (r.image != null && r.image.startsWith("content://" + ART_AUTHORITY + "/img/")) {
+                heroWorker.execute(() -> {
+                    Bitmap b = decodeThumb(Uri.parse(r.image));
+                    main.post(() -> {
+                        if (b != null && h.getBindingAdapterPosition() == position) t.image.setImageBitmap(b);
+                    });
+                });
+            }
+            float progress = r.duration > 0 ? Math.max(0.03f, Math.min(1f, r.position / (float) r.duration)) : 0f;
+            v[1].setBackground(progress > 0 ? progressDrawable(progress) : null);
+            ((ImageView) v[2]).setImageDrawable(app == null ? null : copy(app.banner != null ? app.banner : app.icon));
+            ((TextView) v[3]).setText(r.title);
+            ((TextView) v[4]).setText(r.episode);
+            h.itemView.setOnClickListener(x -> resume(r));
+            h.itemView.setOnFocusChangeListener((x, has) -> {
+                t.setSelected(has);
+                t.showRing(has);
+                ((TextView) v[3]).setTextColor(has ? INK : 0xFFC8CCD0);
+                if (has) onResumeFocused(r);
+            });
+        }
+
+        @Override
+        public int getItemCount() {
+            return resumes.size();
+        }
+    }
+
+    /** A thin bar: the watched part bright, the rest faint. */
+    private Drawable progressDrawable(float fraction) {
+        return new Drawable() {
+            private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            private final RectF r = new RectF();
+
+            @Override
+            public void draw(@NonNull Canvas c) {
+                android.graphics.Rect b = getBounds();
+                float rad = b.height() / 2f;
+                p.setColor(0x55FFFFFF);
+                r.set(b);
+                c.drawRoundRect(r, rad, rad, p);
+                p.setColor(accent);
+                r.set(b.left, b.top, b.left + b.width() * fraction, b.bottom);
+                c.drawRoundRect(r, rad, rad, p);
+            }
+
+            @Override
+            public void setAlpha(int alpha) {
+            }
+
+            @Override
+            public void setColorFilter(android.graphics.ColorFilter cf) {
+            }
+
+            @Override
+            public int getOpacity() {
+                return android.graphics.PixelFormat.TRANSLUCENT;
+            }
+        };
+    }
+
+    /** A Continue Watching thumbnail, decoded small. */
+    private Bitmap decodeThumb(Uri uri) {
+        try {
+            BitmapFactory.Options o = new BitmapFactory.Options();
+            o.inJustDecodeBounds = true;
+            try (InputStream in = getContentResolver().openInputStream(uri)) {
+                BitmapFactory.decodeStream(in, null, o);
+            }
+            if (o.outWidth <= 0 || !WallpaperSize.accepted(o.outWidth, o.outHeight)) return null;
+            int sample = 1;
+            while (o.outWidth / (sample * 2) >= 150 * dp) sample *= 2;
+            BitmapFactory.Options d = new BitmapFactory.Options();
+            d.inSampleSize = sample;
+            try (InputStream in = getContentResolver().openInputStream(uri)) {
+                return BitmapFactory.decodeStream(in, null, d);
+            }
+        } catch (Exception | OutOfMemoryError e) {
+            return null;
         }
     }
 
@@ -949,7 +1396,9 @@ public class RailActivity extends Activity implements RailCarousel.Listener {
             t.setContentDescription(app.label);
             t.setOnClickListener(v -> open(app));
             t.setOnFocusChangeListener((v, has) -> {
-                if (has) setAccent(app.color);
+                if (!has) return;
+                if (carousel.getAlpha() < 1f) restoreCarouselHeader();   // down from Continue Watching
+                setAccent(app.color);
             });
         }
 
